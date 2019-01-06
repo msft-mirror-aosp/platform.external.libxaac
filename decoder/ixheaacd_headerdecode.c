@@ -245,9 +245,10 @@ WORD ixheaacd_decode_pce(struct ia_bit_buf_struct *it_bit_buff,
   WORD32 error_code = 0;
 
   if (*ui_pce_found_in_hdr == 1 || *ui_pce_found_in_hdr == 3) {
-    ia_program_config_struct ptr_config_element;
+    ia_program_config_struct ptr_config_element = {0};
     ptr_config_element.alignment_bits = ptr_prog_config->alignment_bits;
-    ixheaacd_read_prog_config_element(&ptr_config_element, it_bit_buff);
+    error_code =
+        ixheaacd_read_prog_config_element(&ptr_config_element, it_bit_buff);
     *ui_pce_found_in_hdr = 3;
   } else {
     error_code =
@@ -942,7 +943,7 @@ WORD32 ixheaacd_aac_headerdecode(
     ia_exhaacplus_dec_api_struct *p_obj_exhaacplus_dec, UWORD8 *buffer,
     WORD32 *bytes_consumed,
     const ia_aac_dec_huffman_tables_struct *pstr_huffmann_tables) {
-  struct ia_bit_buf_struct it_bit_buff, *handle_bit_buff;
+  struct ia_bit_buf_struct it_bit_buff = {0}, *handle_bit_buff;
   ia_adif_header_struct adif = {0};
   ia_adts_header_struct adts = {0};
   WORD32 result;
@@ -971,6 +972,7 @@ WORD32 ixheaacd_aac_headerdecode(
   handle_bit_buff = ixheaacd_create_bit_buf(&it_bit_buff, (UWORD8 *)buffer,
                                             (WORD16)header_len);
   handle_bit_buff->cnt_bits += (header_len << 3);
+  handle_bit_buff->xaac_jmp_buf = &aac_state_struct->xaac_jmp_buf;
 
   if (is_ga_header == 1) {
     return ixheaacd_ga_hdr_dec(aac_state_struct, header_len, bytes_consumed,
