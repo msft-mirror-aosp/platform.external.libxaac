@@ -347,7 +347,8 @@ WORD32 ixheaacd_aacdec_decodeframe(
 
             prev_data_ele_present = 1;
 
-            if (ptr_adts_crc_info->crc_active == 1) {
+            if (ptr_adts_crc_info->crc_active == 1 &&
+                ptr_adts_crc_info->no_reg < 7) {
               crc_reg = ixheaacd_adts_crc_start_reg(
                   ptr_adts_crc_info, it_bit_buff, CRC_ADTS_RAW_DATA_BLK_LEN);
             }
@@ -485,7 +486,8 @@ WORD32 ixheaacd_aacdec_decodeframe(
         {
           WORD32 flag = 1;
 
-          if ((ele_type != ID_FIL) && (ptr_adts_crc_info->crc_active == 1)) {
+          if ((ele_type != ID_FIL) && (ptr_adts_crc_info->crc_active == 1) &&
+              (ptr_adts_crc_info->no_reg < 7)) {
             crc_reg =
                 ixheaacd_adts_crc_start_reg(ptr_adts_crc_info, it_bit_buff, 0);
           }
@@ -586,7 +588,8 @@ WORD32 ixheaacd_aacdec_decodeframe(
 
             prev_data_ele_present = 1;
 
-            if (ptr_adts_crc_info->crc_active == 1) {
+            if ((ptr_adts_crc_info->crc_active == 1) &&
+                (ptr_adts_crc_info->no_reg < 7)) {
               crc_reg = ixheaacd_adts_crc_start_reg(
                   ptr_adts_crc_info, it_bit_buff, CRC_ADTS_RAW_DATA_BLK_LEN);
             }
@@ -647,9 +650,8 @@ WORD32 ixheaacd_aacdec_decodeframe(
                         it_bit_buff, ptr_ics_info, object_type,
                         aac_dec_handle->samples_per_frame, LEFT);
 
-                    if(temp!=0)
-                    {
-                        return temp;
+                    if (temp != 0) {
+                      return temp;
                     }
                   }
                 }
@@ -706,8 +708,9 @@ WORD32 ixheaacd_aacdec_decodeframe(
           ixheaacd_extension_payload(it_bit_buff, cnt_bits);
         }
 
-        if (((object_type == AOT_ER_AAC_ELD) || (object_type == AOT_ER_AAC_LD))
-                && (p_obj_exhaacplus_dec->aac_config.ld_decoder != 1)) {
+        if (((object_type == AOT_ER_AAC_ELD) ||
+             (object_type == AOT_ER_AAC_LD)) &&
+            (p_obj_exhaacplus_dec->aac_config.ld_decoder != 1)) {
           if (it_bit_buff->cnt_bits) {
             WORD32 alignment = it_bit_buff->bit_pos & 0x07;
             it_bit_buff->cnt_bits = (it_bit_buff->cnt_bits + alignment) & 7;
