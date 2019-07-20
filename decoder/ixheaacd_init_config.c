@@ -66,6 +66,11 @@
 
 #include "ixheaacd_error_codes.h"
 
+static const WORD32 sampling_rate_tbl[] = {
+    96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025,
+    8000,  7350,  0,     0,     57600, 51200, 40000, 38400, 34150, 28800, 25600,
+    20000, 19200, 17075, 14400, 12800, 9600,  0,     0,     0};
+
 UWORD32 ixheaacd_sbr_ratio(UWORD32 core_sbr_framelength_idx) {
   UWORD32 sbr_ratio_index = 0x0FF;
 
@@ -88,22 +93,13 @@ UWORD32 ixheaacd_sbr_ratio(UWORD32 core_sbr_framelength_idx) {
   return sbr_ratio_index;
 }
 
-WORD32 ixheaacd_get_sample_freq_indx(WORD32 sampling_freq) {
-  WORD32 sampling_rate_tbl[] = {96000, 88200, 64000, 48000, 44100, 32000,
-                                24000, 22050, 16000, 12000, 11025, 8000,
-                                7350,  0,     0,     0};
-
+static WORD32 ixheaacd_get_sample_freq_indx(WORD32 sampling_freq) {
   WORD32 index;
-  WORD32 tbl_size = sizeof(sampling_rate_tbl) / sizeof(WORD32) - 1;
+  const WORD32 tbl_size = sizeof(sampling_rate_tbl) / sizeof(WORD32) - 1;
 
   for (index = 0; index < tbl_size; index++) {
     if (sampling_rate_tbl[index] == sampling_freq) break;
   }
-
-  if (index > tbl_size) {
-    return tbl_size - 1;
-  }
-
   return index;
 }
 UWORD32 ixheaacd_sbr_params(UWORD32 core_sbr_framelength_idx,
@@ -393,7 +389,7 @@ WORD32 ixheaacd_decoder_config(
             ixheaacd_read_bits_buf(it_bit_buff, 1);
         pstr_usac_element_config->noise_filling =
             ixheaacd_read_bits_buf(it_bit_buff, 1);
-
+        pstr_usac_element_config->stereo_config_index = 0;
         if (sbr_ratio_index > 0)
           ixheaacd_sbr_config(it_bit_buff,
                               &(pstr_usac_element_config->str_usac_sbr_config));
@@ -412,6 +408,7 @@ WORD32 ixheaacd_decoder_config(
 
         pstr_usac_element_config->tw_mdct = 0;
         pstr_usac_element_config->noise_filling = 0;
+        pstr_usac_element_config->stereo_config_index = 0;
         break;
 
       case ID_USAC_EXT:
@@ -509,12 +506,6 @@ WORD32 ixheaacd_config(ia_bit_buf_struct *it_bit_buff,
     }
 
   } else {
-    static const WORD32 sampling_rate_tbl[] = {
-        96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050,
-        16000, 12000, 11025, 8000,  7350,  0,     0,     57600,
-        51200, 40000, 38400, 34150, 28800, 25600, 20000, 19200,
-        17075, 14400, 12800, 9600,  0,     0,     0};
-
     pstr_usac_conf->usac_sampling_frequency =
         sampling_rate_tbl[pstr_usac_conf->usac_sampling_frequency_index];
   }
