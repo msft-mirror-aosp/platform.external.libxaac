@@ -22,15 +22,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ixheaacd_sbr_common.h"
-#include <ixheaacd_type_def.h>
+#include "ixheaacd_type_def.h"
 
 #include "ixheaacd_constants.h"
-#include <ixheaacd_basic_ops32.h>
-#include <ixheaacd_basic_ops16.h>
-#include <ixheaacd_basic_ops40.h>
+#include "ixheaacd_basic_ops32.h"
+#include "ixheaacd_basic_ops16.h"
+#include "ixheaacd_basic_ops40.h"
 #include "ixheaacd_basic_ops.h"
 
-#include <ixheaacd_basic_op.h>
+#include "ixheaacd_basic_op.h"
 #include "ixheaacd_intrinsics.h"
 #include "ixheaacd_common_rom.h"
 #include "ixheaacd_basic_funcs.h"
@@ -39,7 +39,7 @@
 #include "ixheaacd_sbr_scale.h"
 #include "ixheaacd_lpp_tran.h"
 #include "ixheaacd_env_extr_part.h"
-#include <ixheaacd_sbr_rom.h>
+#include "ixheaacd_sbr_rom.h"
 #include "ixheaacd_hybrid.h"
 #include "ixheaacd_ps_dec.h"
 #include "ixheaacd_env_extr.h"
@@ -253,7 +253,7 @@ ixheaacd_calc_stop_band(WORD32 fs, const WORD32 stop_freq, FLOAT32 upsamp_fac) {
 
   result = k1_min;
   for (i = 0; i < stop_freq; i++) {
-    result = result + arr_diff_stop_freq[i];
+    result = ixheaacd_add32_sat(result, arr_diff_stop_freq[i]);
   }
 
   return (result);
@@ -401,8 +401,7 @@ WORD16 ixheaacd_calc_master_frq_bnd_tbl(
       num_bands1 = bands * num_bands1;
 
       if (ptr_header_data->alter_scale) {
-        num_bands1 = num_bands1 * (0x6276);
-        num_bands1 = num_bands1 >> 15;
+        num_bands1 = (WORD32)(((WORD64)num_bands1 * (0x6276)) >> 15);
       }
       num_bands1 = num_bands1 + 0x1000;
 
