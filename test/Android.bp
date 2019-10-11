@@ -2,6 +2,7 @@ cc_test {
     name: "xaacdec",
 
     vendor_available: true,
+    host_supported: true,
     gtest: false,
 
     cflags: [
@@ -9,9 +10,9 @@ cc_test {
         "-UARM_PROFILE_HW",
         "-UARM_PROFILE_BOARD",
         "-DECLIPSE",
-		"-DDRC_ENABLE",
-		"-DMULTICHANNEL_ENABLE",
-		"-DENABLE_DRC"
+        "-DDRC_ENABLE",
+        "-DMULTICHANNEL_ENABLE",
+        "-DENABLE_DRC"
     ],
 
     include_dirs: [
@@ -19,10 +20,10 @@ cc_test {
     ],
 
     srcs: [
-	"ixheaacd_error.c",
-	"ixheaacd_fileifc.c",
-	"ixheaacd_main.c",
-	"ixheaacd_metadata_read.c"
+        "ixheaacd_error.c",
+        "ixheaacd_fileifc.c",
+        "ixheaacd_main.c",
+        "ixheaacd_metadata_read.c"
     ],
 
     static_libs: ["libxaacdec"],
