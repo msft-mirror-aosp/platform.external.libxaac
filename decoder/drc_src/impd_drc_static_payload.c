@@ -443,9 +443,13 @@ static WORD32 impd_parametric_drc_gen_virtual_gain_sets(
     str_p_loc_drc_coefficients_uni_drc->gain_sequence_count = 0;
     drc_config->drc_coefficients_drc_count += 1;
   }
-  str_p_loc_drc_coefficients_uni_drc->gain_set_count_plus =
-      str_p_loc_drc_coefficients_uni_drc->gain_set_count +
-      str_drc_coeff_param_drc->parametric_drc_gain_set_count;
+  {
+    WORD32 tmp = str_p_loc_drc_coefficients_uni_drc->gain_set_count +
+                 str_drc_coeff_param_drc->parametric_drc_gain_set_count;
+    if (tmp > GAIN_SET_COUNT_MAX) return UNEXPECTED_ERROR;
+    str_p_loc_drc_coefficients_uni_drc->gain_set_count_plus = tmp;
+  }
+
   for (i = str_p_loc_drc_coefficients_uni_drc->gain_set_count;
        i < str_p_loc_drc_coefficients_uni_drc->gain_set_count_plus; i++) {
     str_p_loc_drc_coefficients_uni_drc->gain_set_params[i].band_count = 1;
@@ -773,6 +777,8 @@ impd_parse_dwnmix_instructions(
 
   dwnmix_instructions->downmix_id = (temp >> 16) & 0x7f;
   dwnmix_instructions->target_channel_count = (temp >> 9) & 0x7f;
+  if (dwnmix_instructions->target_channel_count > MAX_CHANNEL_COUNT)
+    return (UNEXPECTED_ERROR);
   dwnmix_instructions->target_layout = (temp >> 1) & 0xff;
   dwnmix_instructions->downmix_coefficients_present = temp & 1;
 
@@ -1225,6 +1231,9 @@ impd_parse_drc_config(ia_bit_buf_struct* it_bit_buff,
     if (err) return (err);
   }
 
+  if ((drc_config->drc_instructions_uni_drc_count +
+       drc_config->dwnmix_instructions_count) >= DRC_INSTRUCTIONS_COUNT_MAX)
+    return (UNEXPECTED_ERROR);
   impd_drc_gen_instructions_for_drc_off(drc_config);
   return (0);
 }
@@ -1446,13 +1455,15 @@ impd_dec_gain_modifiers(ia_bit_buf_struct* it_bit_buff, WORD32 version,
       }
     }
     if (band_count == 1) {
+      WORD32 tmp;
       pstr_gain_modifiers->shape_filter_flag =
           impd_read_bits_buf(it_bit_buff, 1);
       if (it_bit_buff->error) return it_bit_buff->error;
       if (pstr_gain_modifiers->shape_filter_flag) {
-        pstr_gain_modifiers->shape_filter_idx =
-            impd_read_bits_buf(it_bit_buff, 4);
+        tmp = impd_read_bits_buf(it_bit_buff, 4);
         if (it_bit_buff->error) return it_bit_buff->error;
+        if (tmp >= (SHAPE_FILTER_COUNT_MAX + 1)) return UNEXPECTED_ERROR;
+        pstr_gain_modifiers->shape_filter_idx = tmp;
       }
     }
   } else if (version == 0) {
