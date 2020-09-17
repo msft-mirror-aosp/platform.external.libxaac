@@ -34,14 +34,13 @@
 #include "impd_drc_eq.h"
 #include "impd_drc_gain_decoder.h"
 
-extern ia_cicp_sigmoid_characteristic_param_struct
+extern const ia_cicp_sigmoid_characteristic_param_struct
     pstr_cicp_sigmoid_characteristic_param[];
 
-WORD32 impd_gain_db_to_lin(ia_interp_params_struct* interp_params_str,
-                           WORD32 drc_band, FLOAT32 in_param_db_gain,
-                           FLOAT32 in_param_db_slope,
-                           FLOAT32* out_param_lin_gain,
-                           FLOAT32* out_param_lin_slope) {
+VOID impd_gain_db_to_lin(ia_interp_params_struct* interp_params_str,
+                         WORD32 drc_band, FLOAT32 in_param_db_gain,
+                         FLOAT32 in_param_db_slope, FLOAT32* out_param_lin_gain,
+                         FLOAT32* out_param_lin_slope) {
   FLOAT32 loc_db_gain = in_param_db_gain;
   FLOAT32 gain_ratio = 1.0;
 
@@ -93,7 +92,7 @@ WORD32 impd_gain_db_to_lin(ia_interp_params_struct* interp_params_str,
       }
     }
   }
-  return (0);
+  return;
 }
 
 WORD32
@@ -191,8 +190,7 @@ impd_compressor_io_nodes_rt(
   return (0);
 }
 
-WORD32
-impd_compressor_io_nodes_inverse(
+VOID impd_compressor_io_nodes_inverse(
     ia_split_drc_characteristic_struct* split_drc_characteristic,
     FLOAT32 loc_db_gain, FLOAT32* in_level) {
   WORD32 n;
@@ -238,7 +236,7 @@ impd_compressor_io_nodes_inverse(
       }
     }
   }
-  return (0);
+  return;
 }
 
 WORD32
@@ -256,9 +254,9 @@ impd_map_gain(
       if (err) return (err);
       break;
     case CHARACTERISTIC_NODES:
-      err = impd_compressor_io_nodes_inverse(split_drc_characteristic_source,
-                                             gain_in_db, &inLevel);
-      if (err) return (err);
+      impd_compressor_io_nodes_inverse(split_drc_characteristic_source,
+                                       gain_in_db, &inLevel);
+
       break;
     case CHARACTERISTIC_PASS_THRU:
       inLevel = gain_in_db;
@@ -433,15 +431,15 @@ WORD32 impd_interpolate_drc_gain(ia_interp_params_struct* interp_params_str,
     return (UNEXPECTED_ERROR);
   }
 
+  err = impd_conv_to_linear_domain(interp_params_str, drc_band, gain0, slope0,
+                                   &gain_t1, &slope_t1);
+  if (err) return (err);
+  err = impd_conv_to_linear_domain(interp_params_str, drc_band, gain1, slope1,
+                                   &gain_t2, &slope_t2);
+  if (err) return (err);
+
   if (interp_params_str->gain_interpolation_type ==
       GAIN_INTERPOLATION_TYPE_SPLINE) {
-    err = impd_conv_to_linear_domain(interp_params_str, drc_band, gain0, slope0,
-                                     &gain_t1, &slope_t1);
-    if (err) return (err);
-    err = impd_conv_to_linear_domain(interp_params_str, drc_band, gain1, slope1,
-                                     &gain_t2, &slope_t2);
-    if (err) return (err);
-
     slope_t1 = slope_t1 / (FLOAT32)interp_params_str->delta_tmin;
     slope_t2 = slope_t2 / (FLOAT32)interp_params_str->delta_tmin;
     if ((FLOAT32)fabs((FLOAT64)slope_t1) > (FLOAT32)fabs((FLOAT64)slope_t2)) {
@@ -522,14 +520,9 @@ WORD32 impd_interpolate_drc_gain(ia_interp_params_struct* interp_params_str,
       }
     }
   } else {
-    err = impd_conv_to_linear_domain(interp_params_str, drc_band, gain1, slope1,
-                                     &gain_t2, &slope_t2);
-    if (err) return (err);
-
-    a = 0;
-    b = gain_t2;
-
-    result[0] = gain_t2;
+    a = (gain_t2 - gain_t1) / (FLOAT32)gain_step_tdomain;
+    b = gain_t1;
+    result[0] = gain_t1;
     result[gain_step_tdomain] = gain_t2;
     for (n = 1; n < gain_step_tdomain; n++) {
       FLOAT32 t = (FLOAT32)n;
@@ -539,8 +532,8 @@ WORD32 impd_interpolate_drc_gain(ia_interp_params_struct* interp_params_str,
   return 0;
 }
 
-WORD32
-impd_advance_buf(WORD32 drc_frame_size, ia_gain_buffer_struct* pstr_gain_buf) {
+VOID impd_advance_buf(WORD32 drc_frame_size,
+                      ia_gain_buffer_struct* pstr_gain_buf) {
   WORD32 n;
   ia_interp_buf_struct* buf_interpolation;
 
@@ -552,7 +545,7 @@ impd_advance_buf(WORD32 drc_frame_size, ia_gain_buffer_struct* pstr_gain_buf) {
             buf_interpolation->lpcm_gains + drc_frame_size,
             sizeof(FLOAT32) * (drc_frame_size + MAX_SIGNAL_DELAY));
   }
-  return (0);
+  return;
 }
 WORD32
 impd_concatenate_segments(WORD32 drc_frame_size, WORD32 drc_band,
@@ -648,9 +641,8 @@ impd_get_drc_gain(ia_drc_gain_dec_struct* p_drc_gain_dec_structs,
       interp_params_str.clipping_flag = 0;
     }
 
-    err = impd_advance_buf(ia_drc_params_struct->drc_frame_size,
-                           &(drc_gain_buffers->pstr_gain_buf[sel_drc_index]));
-    if (err) return (err);
+    impd_advance_buf(ia_drc_params_struct->drc_frame_size,
+                     &(drc_gain_buffers->pstr_gain_buf[sel_drc_index]));
 
     gainElementIndex = 0;
     for (g = 0; g < num_drc_ch_groups; g++) {
@@ -734,7 +726,7 @@ impd_get_drc_gain(ia_drc_gain_dec_struct* p_drc_gain_dec_structs,
                                      .buf_interpolation[gainElementIndex])
                                     .lpcm_gains +
                                 MAX_SIGNAL_DELAY;
-          err = impd_parametric_lim_type_drc_process(
+          impd_parametric_lim_type_drc_process(
               p_drc_gain_dec_structs->audio_in_out_buf.audio_in_out_buf,
               loudness_normalization_gain_db,
               &p_drc_gain_dec_structs->parametricdrc_params
@@ -742,7 +734,7 @@ impd_get_drc_gain(ia_drc_gain_dec_struct* p_drc_gain_dec_structs,
                        [parametricDrcInstanceIndex]
                    .str_parametric_drc_type_lim_params,
               lpcm_gains);
-          if (err) return (err);
+
         } else if (ia_drc_params_struct->sub_band_domain_mode !=
                        SUBBAND_DOMAIN_MODE_OFF &&
                    !(p_drc_gain_dec_structs->parametricdrc_params

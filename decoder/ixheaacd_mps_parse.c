@@ -18,97 +18,97 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include <math.h>
-#include <ixheaacd_type_def.h>
+#include <assert.h>
+#include <stdio.h>
+#include "ixheaacd_type_def.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_config.h"
-
 #include "ixheaacd_mps_polyphase.h"
-
 #include "ixheaacd_mps_dec.h"
 #include "ixheaacd_mps_interface.h"
 #include "ixheaacd_mps_nlc_dec.h"
 #include "ixheaacd_mps_hybfilter.h"
-
-#include <assert.h>
-#include <stdio.h>
+#include "ixheaacd_error_standards.h"
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
-static int ixheaacd_freq_res_table[] = {0, 28, 20, 14, 10, 7, 5, 4};
+static const int ixheaacd_freq_res_table[] = {0, 28, 20, 14, 10, 7, 5, 4};
 
-static int
+static const int
     ixheaacd_hybrid_band_71_to_processing_band_4_map[MAX_HYBRID_BANDS_MPS] = {
         0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
         2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
         3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3};
 
-static int
+static const int
     ixheaacd_hybrid_band_71_to_processing_band_5_map[MAX_HYBRID_BANDS_MPS] = {
         0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
         3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4};
 
-static int
+static const int
     ixheaacd_hybrid_band_71_to_processing_band_7_map[MAX_HYBRID_BANDS_MPS] = {
         0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5,
         5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
         6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6};
 
-static int
+static const int
     ixheaacd_hybrid_band_71_to_processing_band_10_map[MAX_HYBRID_BANDS_MPS] = {
         0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 7, 7, 8, 8, 8,
         8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
         9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9};
 
-static int
+static const int
     ixheaacd_hybrid_band_71_to_processing_band_14_map[MAX_HYBRID_BANDS_MPS] = {
         0,  0,  0,  0,  1,  1,  2,  3,  4,  4,  5,  6,  6,  7,  7,  8,  8,  8,
         9,  9,  9,  10, 10, 10, 10, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 12,
         12, 12, 12, 12, 12, 12, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
         13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13};
 
-int ixheaacd_hybrid_band_71_to_processing_band_20_map[MAX_HYBRID_BANDS_MPS] = {
-    1,  0,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 14,
-    15, 15, 15, 16, 16, 16, 16, 17, 17, 17, 17, 17, 18, 18, 18, 18, 18, 18,
-    18, 18, 18, 18, 18, 18, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
-    19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19};
+const int
+    ixheaacd_hybrid_band_71_to_processing_band_20_map[MAX_HYBRID_BANDS_MPS] = {
+        1,  0,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 14,
+        15, 15, 15, 16, 16, 16, 16, 17, 17, 17, 17, 17, 18, 18, 18, 18, 18, 18,
+        18, 18, 18, 18, 18, 18, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
+        19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19};
 
-int ixheaacd_hybrid_band_71_to_processing_band_28_map[MAX_HYBRID_BANDS_MPS] = {
-    1,  0,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
-    16, 17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 21, 22, 22, 22, 23, 23, 23,
-    23, 24, 24, 24, 24, 24, 25, 25, 25, 25, 25, 25, 26, 26, 26, 26, 26, 26,
-    26, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27};
+const int
+    ixheaacd_hybrid_band_71_to_processing_band_28_map[MAX_HYBRID_BANDS_MPS] = {
+        1,  0,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
+        16, 17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 21, 22, 22, 22, 23, 23, 23,
+        23, 24, 24, 24, 24, 24, 25, 25, 25, 25, 25, 25, 26, 26, 26, 26, 26, 26,
+        26, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27};
 
-static float ixheaacd_mps_clip_gain_table[] = {1.000000f, 1.189207f, 1.414213f,
-                                               1.681792f, 2.000000f, 2.378414f,
-                                               2.828427f, 4.000000f};
+static const float ixheaacd_mps_clip_gain_table[] = {
+    1.000000f, 1.189207f, 1.414213f, 1.681792f,
+    2.000000f, 2.378414f, 2.828427f, 4.000000f};
 
-static int ixheaacd_mps_stride_table[] = {1, 2, 5, 28};
+static const int ixheaacd_mps_stride_table[] = {1, 2, 5, 28};
 
-static float ixheaacd_cld_de_quant_table[] = {
+static const float ixheaacd_cld_de_quant_table[] = {
     -150.0, -45.0, -40.0, -35.0, -30.0, -25.0, -22.0, -19.0,
     -16.0,  -13.0, -10.0, -8.0,  -6.0,  -4.0,  -2.0,  0.0,
     2.0,    4.0,   6.0,   8.0,   10.0,  13.0,  16.0,  19.0,
     22.0,   25.0,  30.0,  35.0,  40.0,  45.0,  150.0};
 
-static float ixheaacd_icc_de_quant_table[] = {
+static const float ixheaacd_icc_de_quant_table[] = {
     1.0000f, 0.9370f, 0.84118f, 0.60092f, 0.36764f, 0.0f, -0.5890f, -0.9900f};
 
-float ixheaacd_ipd_de_quant_table[] = {
+const float ixheaacd_ipd_de_quant_table[] = {
     0.f,          0.392699082f, 0.785398163f, 1.178097245f,
     1.570796327f, 1.963495408f, 2.35619449f,  2.748893572f,
     3.141592654f, 3.534291735f, 3.926990817f, 4.319689899f,
     4.71238898f,  5.105088062f, 5.497787144f, 5.890486225f};
-int ixheaacd_ipd_de_quant_table_q28[] = {
+const int ixheaacd_ipd_de_quant_table_q28[] = {
     0,          105414360,  210828720,  316243072, 421657440,  527071776,
     632486144,  737900480,  843314880,  948729216, 1054143552, 1159557888,
     1264972288, 1370386688, 1475800960, 1581215360};
-static int ixheaacd_smoothing_time_table[] = {64, 128, 256, 512};
+static const int ixheaacd_smoothing_time_table[] = {64, 128, 256, 512};
 
-static int ixheaacd_inverse_smoothing_time_table_q30[] = {16777216, 8388608,
-                                                          4194304, 2097152};
+static const int ixheaacd_inverse_smoothing_time_table_q30[] = {
+    16777216, 8388608, 4194304, 2097152};
 
 static WORD32 bound_check(WORD32 var, WORD32 lower_bound, WORD32 upper_bound) {
   var = min(var, upper_bound);
@@ -240,7 +240,7 @@ static int ixheaacd_mps_getstridemap(int freq_res_stride, int band_start,
   return data_bands;
 }
 
-static VOID ixheaacd_mps_ecdata_decoding(
+static IA_ERRORCODE ixheaacd_mps_ecdata_decoding(
     ia_mps_dec_state_struct *self, ia_handle_bit_buf_struct bitstream,
     int data[MAX_PARAMETER_SETS_MPS][MAX_PARAMETER_BANDS], int datatype) {
   int i, j, pb, set_index, bs_data_pair, data_bands, old_quant_coarse_xxx;
@@ -250,6 +250,7 @@ static VOID ixheaacd_mps_ecdata_decoding(
   int *lastdata = NULL;
   ia_mps_data_struct *frame_xxx_data = NULL;
   int default_val = 0;
+  IA_ERRORCODE err = IA_NO_ERROR;
 
   ia_mps_bs_frame *frame = &(self->bs_frame);
 
@@ -315,10 +316,11 @@ static VOID ixheaacd_mps_ecdata_decoding(
           lastdata[pb] = lastdata[strides[pb]];
         }
 
-        ixheaacd_mps_ecdatapairdec(
+        err = ixheaacd_mps_ecdatapairdec(
             bitstream, data, lastdata, datatype, set_index, data_bands,
             bs_data_pair, frame_xxx_data->bs_quant_coarse_xxx[set_index],
             frame->independency_flag && (i == 0));
+        if (err) return err;
 
         for (pb = 0; pb < data_bands; pb++) {
           for (j = strides[pb]; j < strides[pb + 1]; j++) {
@@ -346,11 +348,12 @@ static VOID ixheaacd_mps_ecdata_decoding(
       }
     }
   }
+  return err;
 }
 
-VOID ixheaacd_mps_frame_parsing(ia_mps_dec_state_struct *self,
-                                int usac_independency_flag,
-                                ia_handle_bit_buf_struct bitstream) {
+IA_ERRORCODE ixheaacd_mps_frame_parsing(ia_mps_dec_state_struct *self,
+                                        int usac_independency_flag,
+                                        ia_handle_bit_buf_struct bitstream) {
   int i, bs_frame_type, data_bands, bs_temp_shape_enable, num_of_temp_shape_ch;
   int ps, pg, ts, pb;
   int env_shape_data[MAX_TIME_SLOTS];
@@ -358,8 +361,9 @@ VOID ixheaacd_mps_frame_parsing(ia_mps_dec_state_struct *self,
   int bits_param_slot = 0;
 
   ia_mps_bs_frame *frame = &(self->bs_frame);
+  IA_ERRORCODE err = IA_NO_ERROR;
 
-  if (self->parse_nxt_frame == 0) return;
+  if (self->parse_nxt_frame == 0) return IA_NO_ERROR;
 
   self->num_parameter_sets_prev = self->num_parameter_sets;
 
@@ -390,8 +394,11 @@ VOID ixheaacd_mps_frame_parsing(ia_mps_dec_state_struct *self,
     frame->independency_flag = 1;
   }
 
-  ixheaacd_mps_ecdata_decoding(self, bitstream, frame->cmp_cld_idx, CLD);
-  ixheaacd_mps_ecdata_decoding(self, bitstream, frame->cmp_icc_idx, ICC);
+  err = ixheaacd_mps_ecdata_decoding(self, bitstream, frame->cmp_cld_idx, CLD);
+  if (err) return err;
+
+  err = ixheaacd_mps_ecdata_decoding(self, bitstream, frame->cmp_icc_idx, ICC);
+  if (err) return err;
 
   if (self->config->bs_phase_coding) {
     self->bs_phase_mode = ixheaacd_read_bits_buf(bitstream, 1);
@@ -408,7 +415,9 @@ VOID ixheaacd_mps_frame_parsing(ia_mps_dec_state_struct *self,
       self->opd_smoothing_mode = 0;
     } else {
       self->opd_smoothing_mode = ixheaacd_read_bits_buf(bitstream, 1);
-      ixheaacd_mps_ecdata_decoding(self, bitstream, frame->ipd_idx_data, IPD);
+      err = ixheaacd_mps_ecdata_decoding(self, bitstream, frame->ipd_idx_data,
+                                         IPD);
+      if (err) return err;
     }
   }
 
@@ -499,12 +508,12 @@ VOID ixheaacd_mps_frame_parsing(ia_mps_dec_state_struct *self,
     UWORD64 c_64;
     unsigned short b;
     unsigned short r[1];
-    unsigned short table_64[] = {6,  11, 16, 20, 23, 27, 30, 33, 35, 38, 40,
-                                 42, 44, 46, 48, 49, 51, 52, 53, 55, 56, 57,
-                                 58, 58, 59, 60, 60, 60, 61, 61, 61, 61};
-    unsigned short table_32[] = {5,  9,  13, 16, 18, 20, 22, 24,
-                                 25, 26, 27, 28, 29, 29, 30, 30};
-    unsigned short *tab = NULL;
+    static const unsigned short table_64[] = {
+        6,  11, 16, 20, 23, 27, 30, 33, 35, 38, 40, 42, 44, 46, 48, 49,
+        51, 52, 53, 55, 56, 57, 58, 58, 59, 60, 60, 60, 61, 61, 61, 61};
+    static const unsigned short table_32[] = {5,  9,  13, 16, 18, 20, 22, 24,
+                                              25, 26, 27, 28, 29, 29, 30, 30};
+    unsigned const short *tab = NULL;
     int k;
     unsigned short h;
     WORD32 nbits_tr_slots = 0;
@@ -598,6 +607,7 @@ VOID ixheaacd_mps_frame_parsing(ia_mps_dec_state_struct *self,
   }
 
   self->parse_nxt_frame = 0;
+  return err;
 }
 
 static VOID ixheaacd_mps_createmapping(int map[MAX_PARAMETER_BANDS + 1],

@@ -20,10 +20,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include <ixheaacd_type_def.h>
+#include "ixheaacd_type_def.h"
 #include "ixheaacd_interface.h"
 #include "ixheaacd_constants.h"
-#include <ixheaacd_basic_ops32.h>
+#include "ixheaacd_basic_ops32.h"
 #include "ixheaacd_basic_ops40.h"
 #include "ixheaacd_function_selector.h"
 
@@ -1806,17 +1806,17 @@ VOID ixheaacd_complex_fft_p3(WORD32 *xr, WORD32 *xi, WORD32 nlength,
   return;
 }
 
-VOID ixheaacd_complex_fft(WORD32 *data_r, WORD32 *data_i, WORD32 nlength,
-                          WORD32 fft_mode, WORD32 *preshift) {
+WORD32 ixheaacd_complex_fft(WORD32 *data_r, WORD32 *data_i, WORD32 nlength,
+                            WORD32 fft_mode, WORD32 *preshift) {
   if (nlength & (nlength - 1)) {
     if ((nlength != 24) && (nlength != 48) && (nlength != 96) &&
         (nlength != 192) && (nlength != 384)) {
       printf("%d point FFT not supported", nlength);
-      exit(0);
+      return IA_FATAL_ERROR;
     }
     ixheaacd_complex_fft_p3(data_r, data_i, nlength, fft_mode, preshift);
   } else
     (*ixheaacd_complex_fft_p2)(data_r, data_i, nlength, fft_mode, preshift);
 
-  return;
+  return 0;
 }

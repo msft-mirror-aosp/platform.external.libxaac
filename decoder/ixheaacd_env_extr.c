@@ -18,16 +18,17 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include <string.h>
+#include <math.h>
 #include "ixheaacd_sbr_common.h"
-#include <ixheaacd_type_def.h>
+#include "ixheaacd_type_def.h"
 
 #include "ixheaacd_constants.h"
-#include <ixheaacd_basic_ops32.h>
-#include <ixheaacd_basic_ops16.h>
-#include <ixheaacd_basic_ops40.h>
+#include "ixheaacd_basic_ops32.h"
+#include "ixheaacd_basic_ops16.h"
+#include "ixheaacd_basic_ops40.h"
 #include "ixheaacd_basic_ops.h"
 
-#include <ixheaacd_basic_op.h>
+#include "ixheaacd_basic_op.h"
 #include "ixheaacd_intrinsics.h"
 #include "ixheaacd_common_rom.h"
 #include "ixheaacd_basic_funcs.h"
@@ -40,12 +41,10 @@
 #include "ixheaacd_sbr_scale.h"
 #include "ixheaacd_lpp_tran.h"
 #include "ixheaacd_env_extr_part.h"
-#include <ixheaacd_sbr_rom.h>
+#include "ixheaacd_sbr_rom.h"
 #include "ixheaacd_hybrid.h"
 #include "ixheaacd_ps_dec.h"
 #include "ixheaacd_env_extr.h"
-
-#include <math.h>
 
 #include "ixheaacd_sbr_const.h"
 #include "ixheaacd_intrinsics.h"
@@ -120,6 +119,7 @@ static WORD32 ixheaacd_read_esbr_pvc_envelope(ia_pvc_data_struct *ptr_pvc_data,
   WORD32 sum_length = 0;
   WORD32 length_bits = 4;
   UWORD8 pvc_id_bits = PVC_ID_BITS;
+  IA_ERRORCODE err = IA_NO_ERROR;
 
   div_mode = (UWORD8)ixheaacd_read_bits_buf(it_bit_buff, PVC_DIV_MODE_BITS);
   ns_mode = (UWORD8)ixheaacd_read_bits_buf(it_bit_buff, PVC_NS_MODE_BITS);
@@ -224,7 +224,7 @@ static WORD32 ixheaacd_read_esbr_pvc_envelope(ia_pvc_data_struct *ptr_pvc_data,
   for (i = 0; i < PVC_NUM_TIME_SLOTS; i++) {
     ptr_pvc_data->pvc_id[i] = pvc_id[i];
   }
-  return 0;
+  return err;
 }
 
 static VOID ixheaacd_pvc_env_dtdf_data(
@@ -564,9 +564,10 @@ static WORD16 ixheaacd_validate_frame_info(
   return 1;
 }
 
-static WORD16 ixheaacd_read_extn_data(
-    ia_sbr_header_data_struct *ptr_header_data, ia_ps_dec_struct *ptr_ps_dec,
-    ia_bit_buf_struct *it_bit_buff, ia_ps_tables_struct *ps_tables_ptr) {
+static VOID ixheaacd_read_extn_data(ia_sbr_header_data_struct *ptr_header_data,
+                                    ia_ps_dec_struct *ptr_ps_dec,
+                                    ia_bit_buf_struct *it_bit_buff,
+                                    ia_ps_tables_struct *ps_tables_ptr) {
   WORD i;
   WORD extended_data;
   WORD no_bits_left;
@@ -596,7 +597,7 @@ static WORD16 ixheaacd_read_extn_data(
         case EXTENSION_ID_PS_CODING:
 
           if (ptr_ps_dec == NULL) {
-            return 0;
+            return;
           }
 
           if (!(ptr_ps_dec->force_mono || ps_read)) {
@@ -605,7 +606,7 @@ static WORD16 ixheaacd_read_extn_data(
                                                       (WORD16)no_bits_left,
                                                       ps_tables_ptr));
 
-            if (no_bits_left < 0) return 0;
+            if (no_bits_left < 0) return;
 
             ptr_header_data->channel_mode = PS_STEREO;
             ps_read = 1;
@@ -620,11 +621,11 @@ static WORD16 ixheaacd_read_extn_data(
       }
     }
 
-    if (no_bits_left < 0) return 0;
+    if (no_bits_left < 0) return;
 
     ixheaacd_read_bits_buf(it_bit_buff, no_bits_left);
   }
-  return 1;
+  return;
 }
 
 WORD32 ixheaacd_sbr_read_pvc_sce(ia_sbr_frame_info_data_struct *ptr_frame_data,
@@ -671,8 +672,9 @@ WORD32 ixheaacd_sbr_read_pvc_sce(ia_sbr_frame_info_data_struct *ptr_frame_data,
 
   ptr_pvc_data->pvc_mode = ptr_header_data->pvc_mode;
 
-  ixheaacd_read_esbr_pvc_envelope(ptr_pvc_data, it_bit_buff,
-                                  usac_independency_flag);
+  err_code = ixheaacd_read_esbr_pvc_envelope(ptr_pvc_data, it_bit_buff,
+                                             usac_independency_flag);
+  if (err_code) return err_code;
 
   ixheaacd_read_sbr_noise_floor_data(ptr_header_data, ptr_frame_data,
                                      it_bit_buff, env_extr_tables_ptr);
@@ -686,15 +688,14 @@ WORD32 ixheaacd_sbr_read_pvc_sce(ia_sbr_frame_info_data_struct *ptr_frame_data,
 
   ptr_frame_data->coupling_mode = COUPLING_OFF;
 
-  return 0;
+  return err_code;
 }
 
-WORD8 ixheaacd_sbr_read_sce(ia_sbr_header_data_struct *ptr_header_data,
-                            ia_sbr_frame_info_data_struct *ptr_frame_data,
-                            ia_ps_dec_struct *ptr_ps_dec,
-                            ia_bit_buf_struct *it_bit_buff,
-                            ia_sbr_tables_struct *ptr_sbr_tables,
-                            WORD audio_object_type) {
+IA_ERRORCODE ixheaacd_sbr_read_sce(
+    ia_sbr_header_data_struct *ptr_header_data,
+    ia_sbr_frame_info_data_struct *ptr_frame_data, ia_ps_dec_struct *ptr_ps_dec,
+    ia_bit_buf_struct *it_bit_buff, ia_sbr_tables_struct *ptr_sbr_tables,
+    WORD audio_object_type) {
   WORD32 bit;
   WORD32 i;
   WORD32 hbe_flag = ptr_header_data->hbe_flag;
@@ -702,6 +703,7 @@ WORD8 ixheaacd_sbr_read_sce(ia_sbr_header_data_struct *ptr_header_data,
   WORD32 usac_flag = ptr_header_data->usac_flag;
   ia_env_extr_tables_struct *env_extr_tables_ptr =
       ptr_sbr_tables->env_extr_tables_ptr;
+  IA_ERRORCODE err = IA_NO_ERROR;
 
   ptr_frame_data->coupling_mode = COUPLING_OFF;
 
@@ -712,8 +714,8 @@ WORD8 ixheaacd_sbr_read_sce(ia_sbr_header_data_struct *ptr_header_data,
     if (audio_object_type == AOT_ER_AAC_ELD ||
         audio_object_type == AOT_ER_AAC_LD) {
       if (ptr_frame_data->eld_sbr_flag == 1) {
-        if (!ixheaacd_extract_frame_info_ld(it_bit_buff, ptr_frame_data))
-          return 0;
+        err = ixheaacd_extract_frame_info_ld(it_bit_buff, ptr_frame_data);
+        if (err) return err;
       }
     } else {
       if (!ixheaacd_sbr_time_freq_grid_info(it_bit_buff, ptr_frame_data,
@@ -797,16 +799,16 @@ WORD8 ixheaacd_sbr_read_sce(ia_sbr_header_data_struct *ptr_header_data,
   return 1;
 }
 
-WORD8 ixheaacd_sbr_read_cpe(ia_sbr_header_data_struct *ptr_header_data,
-                            ia_sbr_frame_info_data_struct **ptr_frame_data,
-                            ia_bit_buf_struct *it_bit_buff,
-                            ia_sbr_tables_struct *ptr_sbr_tables,
-                            WORD audio_object_type) {
+IA_ERRORCODE ixheaacd_sbr_read_cpe(
+    ia_sbr_header_data_struct *ptr_header_data,
+    ia_sbr_frame_info_data_struct **ptr_frame_data,
+    ia_bit_buf_struct *it_bit_buff, ia_sbr_tables_struct *ptr_sbr_tables,
+    WORD audio_object_type) {
   WORD32 i, k, bit, num_ch = 2;
   WORD32 num_if_bands = ptr_header_data->pstr_freq_band_data->num_if_bands;
   WORD32 hbe_flag = ptr_header_data->hbe_flag;
   WORD32 usac_flag = ptr_header_data->usac_flag;
-
+  IA_ERRORCODE err = IA_NO_ERROR;
   ia_env_extr_tables_struct *env_extr_tables_ptr =
       ptr_sbr_tables->env_extr_tables_ptr;
   bit = ixheaacd_read_bits_buf(it_bit_buff, 1);
@@ -899,8 +901,8 @@ WORD8 ixheaacd_sbr_read_cpe(ia_sbr_header_data_struct *ptr_header_data,
     if (audio_object_type == AOT_ER_AAC_ELD ||
         audio_object_type == AOT_ER_AAC_LD) {
       if (ptr_frame_data[i]->eld_sbr_flag == 1) {
-        if (!ixheaacd_extract_frame_info_ld(it_bit_buff, ptr_frame_data[i]))
-          return 0;
+        err = ixheaacd_extract_frame_info_ld(it_bit_buff, ptr_frame_data[i]);
+        if (err) return err;
       }
     } else {
       if (!ixheaacd_sbr_time_freq_grid_info(it_bit_buff, ptr_frame_data[i],
@@ -942,13 +944,19 @@ WORD8 ixheaacd_sbr_read_cpe(ia_sbr_header_data_struct *ptr_header_data,
       ptr_frame_data[1]->sbr_invf_mode[i] = ptr_frame_data[0]->sbr_invf_mode[i];
     }
 
-    ixheaacd_read_sbr_env_data(ptr_header_data, ptr_frame_data[0], it_bit_buff,
-                               env_extr_tables_ptr, audio_object_type);
+    if (!ixheaacd_read_sbr_env_data(ptr_header_data, ptr_frame_data[0],
+                                    it_bit_buff, env_extr_tables_ptr,
+                                    audio_object_type)) {
+      return 0;
+    }
     ixheaacd_read_sbr_noise_floor_data(ptr_header_data, ptr_frame_data[0],
                                        it_bit_buff, env_extr_tables_ptr);
 
-    ixheaacd_read_sbr_env_data(ptr_header_data, ptr_frame_data[1], it_bit_buff,
-                               env_extr_tables_ptr, audio_object_type);
+    if (!ixheaacd_read_sbr_env_data(ptr_header_data, ptr_frame_data[1],
+                                    it_bit_buff, env_extr_tables_ptr,
+                                    audio_object_type)) {
+      return 0;
+    }
     ixheaacd_read_sbr_noise_floor_data(ptr_header_data, ptr_frame_data[1],
                                        it_bit_buff, env_extr_tables_ptr);
 
@@ -1324,13 +1332,14 @@ WORD16 ixheaacd_read_sbr_env_data(
   return 1;
 }
 
-int ixheaacd_extract_frame_info_ld(
+IA_ERRORCODE ixheaacd_extract_frame_info_ld(
     ia_bit_buf_struct *it_bit_buff,
     ia_sbr_frame_info_data_struct *h_frame_data) {
   int abs_bord_lead = 0, num_rel_lead = 0, num_rel_trail = 0, bs_num_env = 0,
       frame_class, temp, env, k, abs_bord_trail = 0, middle_bord = 0,
       bs_num_noise, transient_env_temp = 0, bs_transient_position = 0;
 
+  IA_ERRORCODE err = IA_NO_ERROR;
   WORD16 time_border[MAX_ENVELOPES + 1];
   WORD16 time_border_noise[2 + 1];
   WORD16 f[MAX_ENVELOPES + 1];
@@ -1450,7 +1459,7 @@ int ixheaacd_extract_frame_info_ld(
   memcpy(v_frame_info->noise_border_vec, time_border_noise,
          (bs_num_noise + 1) * sizeof(WORD16));
 
-  return 1;
+  return err;
 }
 
 WORD32 ixheaacd_pvc_time_freq_grid_info(
@@ -1551,7 +1560,7 @@ WORD16 ixheaacd_sbr_time_freq_grid_info(
          bs_var_bord = 0, temp = 0;
   WORD32 freq_res_0 = 0, frame_class;
   WORD32 abs_bord_lead, abs_bord_trail, num_rel_trail, num_rel_lead;
-  WORD32 pointer_bits_array[7] = {1, 2, 2, 3, 3, 3, 3};
+  static const WORD32 pointer_bits_array[7] = {1, 2, 2, 3, 3, 3, 3};
   ia_frame_info_struct *p_fixfix_tab;
   ia_frame_info_struct *p_frame_info = &ptr_frame_data->str_frame_info_details;
 

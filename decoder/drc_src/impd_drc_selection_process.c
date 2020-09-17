@@ -59,9 +59,8 @@ WORD32 impd_drc_uni_selction_proc_init(
       pstr_drc_uni_sel_proc->eq_set_id_valid_flag[i] = 0;
     }
   }
-  err = impd_drc_sel_proc_init_interface_params(pstr_drc_uni_sel_proc,
-                                                pstr_drc_interface);
-  if (err) return (err);
+  impd_drc_sel_proc_init_interface_params(pstr_drc_uni_sel_proc,
+                                          pstr_drc_interface);
 
   pstr_drc_uni_sel_proc->subband_domain_mode = subband_domain_mode;
 
@@ -129,7 +128,6 @@ impd_drc_uni_sel_proc_process(
       pstr_drc_uni_sel_proc->loudness_info_set_flag ||
       pstr_drc_uni_sel_proc->sel_proc_request_flag) {
     WORD32 repeat_selection = 1;
-    WORD32 loop_cnt = 0;
 
     err = impd_manage_drc_complexity(pstr_drc_uni_sel_proc, pstr_drc_config);
     if (err) return (err);
@@ -170,9 +168,10 @@ impd_drc_uni_sel_proc_process(
       for (i = SUB_DRC_COUNT - 1; i >= 0; i--) {
         WORD32 drc_instructions_index =
             pstr_drc_uni_sel_proc->drc_instructions_index[i];
+        ia_drc_instructions_struct* str_drc_instruction_str;
         if (drc_instructions_index < 0) continue;
 
-        ia_drc_instructions_struct* str_drc_instruction_str =
+        str_drc_instruction_str =
             &(pstr_drc_uni_sel_proc->drc_config
                   .str_drc_instruction_str[drc_instructions_index]);
 
@@ -213,11 +212,6 @@ impd_drc_uni_sel_proc_process(
       err = impd_manage_complexity(pstr_drc_uni_sel_proc, pstr_drc_config,
                                    &repeat_selection);
       if (err) return (err);
-
-      loop_cnt++;
-      if (loop_cnt > 100) {
-        return (UNEXPECTED_ERROR);
-      }
     }
 
     pstr_drc_uni_sel_proc->sel_proc_request_flag = 0;
@@ -955,9 +949,10 @@ WORD32 impd_manage_complexity(ia_drc_sel_pro_struct* pstr_drc_uni_sel_proc,
     } else {
       complexityPerCoeff = 2.0f;
     }
-    impd_find_downmix(pstr_drc_config,
-                      uni_drc_sel_proc_output->active_downmix_id,
-                      &dwnmix_instructions);
+    err = impd_find_downmix(pstr_drc_config,
+                            uni_drc_sel_proc_output->active_downmix_id,
+                            &dwnmix_instructions);
+    if (err) return (err);
     if (dwnmix_instructions->downmix_coefficients_present == 1) {
       for (i = 0; i < uni_drc_sel_proc_output->base_channel_count; i++) {
         for (j = 0; j < uni_drc_sel_proc_output->target_channel_count; j++) {
