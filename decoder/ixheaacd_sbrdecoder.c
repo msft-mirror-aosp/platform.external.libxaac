@@ -19,23 +19,23 @@
 */
 #include <string.h>
 #include "ixheaacd_sbr_common.h"
-#include <ixheaacd_type_def.h>
+#include "ixheaacd_type_def.h"
 
 #include "ixheaacd_constants.h"
-#include <ixheaacd_basic_ops32.h>
-#include <ixheaacd_basic_ops16.h>
-#include <ixheaacd_basic_ops40.h>
+#include "ixheaacd_basic_ops32.h"
+#include "ixheaacd_basic_ops16.h"
+#include "ixheaacd_basic_ops40.h"
 #include "ixheaacd_basic_ops.h"
 #include "ixheaacd_defines.h"
 
 #include "ixheaacd_intrinsics.h"
 #include "ixheaacd_sbr_const.h"
-#include <ixheaacd_basic_op.h>
+#include "ixheaacd_basic_op.h"
 #include "ixheaacd_defines.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_pns.h"
 
-#include <ixheaacd_aac_rom.h>
+#include "ixheaacd_aac_rom.h"
 #include "ixheaacd_pulsedata.h"
 
 #include "ixheaacd_drc_data_struct.h"
@@ -49,7 +49,7 @@
 #include "ixheaacd_sbr_scale.h"
 #include "ixheaacd_lpp_tran.h"
 #include "ixheaacd_env_extr_part.h"
-#include <ixheaacd_sbr_rom.h>
+#include "ixheaacd_sbr_rom.h"
 #include "ixheaacd_hybrid.h"
 #include "ixheaacd_ps_dec.h"
 #include "ixheaacd_ps_bitdec.h"
@@ -203,7 +203,7 @@ static WORD32 ixheaacd_sbr_dec_reset(ia_sbr_dec_struct *ptr_sbr_dec,
     err |= ixheaacd_reset_hf_generator(&ptr_sbr_dec->str_hf_generator,
                                        ptr_header_data, audio_object_type);
 
-    err |= ixheaacd_derive_lim_band_tbl(
+    ixheaacd_derive_lim_band_tbl(
         ptr_header_data,
         ptr_sbr_dec->str_hf_generator.pstr_settings->str_patch_param,
         ptr_sbr_dec->str_hf_generator.pstr_settings->num_patches,
@@ -213,10 +213,9 @@ static WORD32 ixheaacd_sbr_dec_reset(ia_sbr_dec_struct *ptr_sbr_dec,
   return err;
 }
 
-WORD32 ixheaacd_prepare_upsamp(ia_sbr_header_data_struct **ptr_header_data,
-                               ia_sbr_channel_struct *pstr_sbr_channel[2],
-                               WORD32 num_channels) {
-  WORD16 err = 0;
+VOID ixheaacd_prepare_upsamp(ia_sbr_header_data_struct **ptr_header_data,
+                             ia_sbr_channel_struct *pstr_sbr_channel[2],
+                             WORD32 num_channels) {
   WORD32 lr;
   ia_sbr_qmf_filter_bank_struct *sbr_qmf_bank;
 
@@ -235,7 +234,7 @@ WORD32 ixheaacd_prepare_upsamp(ia_sbr_header_data_struct **ptr_header_data,
     sbr_qmf_bank->usb = NO_ANALYSIS_CHANNELS;
     ptr_header_data[lr]->sync_state = UPSAMPLING;
   }
-  return err;
+  return;
 }
 
 IA_ERRORCODE ixheaacd_applysbr(
@@ -500,6 +499,7 @@ IA_ERRORCODE ixheaacd_applysbr(
     if (err || (ptr_header_data[k]->sync_state == SBR_NOT_INITIALIZED)) {
       WORD32 lr1 = ps_enable ? 2 : num_channels;
       ixheaacd_prepare_upsamp(ptr_header_data, pstr_sbr_channel, lr1);
+      if (err) return err;
     }
 
     if (frame_status && (ptr_header_data[k]->sync_state == SBR_ACTIVE)) {
@@ -521,6 +521,7 @@ IA_ERRORCODE ixheaacd_applysbr(
           frame_status = ixheaacd_sbr_read_sce(
               ptr_header_data[k], ptr_frame_data[k], self->pstr_ps_stereo_dec,
               it_bit_buff, self->pstr_sbr_tables, audio_object_type);
+          if (frame_status < 0) return frame_status;
         } else if (ptr_frame_data[k]->sbr_mode == PVC_SBR) {
           frame_status = ixheaacd_sbr_read_pvc_sce(
               ptr_frame_data[k], it_bit_buff, 0, self->ptr_pvc_data_str,

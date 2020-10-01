@@ -18,18 +18,18 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include "ixheaacd_sbr_common.h"
-#include <ixheaacd_type_def.h>
+#include "ixheaacd_type_def.h"
 #include "ixheaacd_constants.h"
-#include <ixheaacd_basic_ops32.h>
-#include <ixheaacd_basic_ops16.h>
-#include <ixheaacd_basic_ops40.h>
+#include "ixheaacd_basic_ops32.h"
+#include "ixheaacd_basic_ops16.h"
+#include "ixheaacd_basic_ops40.h"
 #include "ixheaacd_basic_ops.h"
 
 #include "ixheaacd_defines.h"
-#include <ixheaacd_aac_rom.h>
+#include "ixheaacd_aac_rom.h"
 #include "ixheaacd_aac_imdct.h"
 #include "ixheaacd_bitbuffer.h"
-#include <ixheaacd_basic_op.h>
+#include "ixheaacd_basic_op.h"
 #include "ixheaacd_intrinsics.h"
 
 #include "ixheaacd_pulsedata.h"
@@ -58,7 +58,7 @@
 #define LONG_BLOCK_SECT_LEN 5
 #define SHORT_BLOCK_SECT_LEN 3
 
-WORD16 ixheaacd_read_section_data(
+IA_ERRORCODE ixheaacd_read_section_data(
     ia_bit_buf_struct *it_bit_buff,
     ia_aac_dec_channel_info_struct *ptr_aac_dec_channel_info,
     WORD32 aac_spect_data_resil_flag, WORD32 aac_sect_data_resil_flag,

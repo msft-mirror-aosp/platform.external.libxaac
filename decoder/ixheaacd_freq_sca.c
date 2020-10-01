@@ -22,15 +22,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ixheaacd_sbr_common.h"
-#include <ixheaacd_type_def.h>
+#include "ixheaacd_type_def.h"
 
 #include "ixheaacd_constants.h"
-#include <ixheaacd_basic_ops32.h>
-#include <ixheaacd_basic_ops16.h>
-#include <ixheaacd_basic_ops40.h>
+#include "ixheaacd_basic_ops32.h"
+#include "ixheaacd_basic_ops16.h"
+#include "ixheaacd_basic_ops40.h"
 #include "ixheaacd_basic_ops.h"
 
-#include <ixheaacd_basic_op.h>
+#include "ixheaacd_basic_op.h"
 #include "ixheaacd_intrinsics.h"
 #include "ixheaacd_common_rom.h"
 #include "ixheaacd_basic_funcs.h"
@@ -39,7 +39,7 @@
 #include "ixheaacd_sbr_scale.h"
 #include "ixheaacd_lpp_tran.h"
 #include "ixheaacd_env_extr_part.h"
-#include <ixheaacd_sbr_rom.h>
+#include "ixheaacd_sbr_rom.h"
 #include "ixheaacd_hybrid.h"
 #include "ixheaacd_ps_dec.h"
 #include "ixheaacd_env_extr.h"
@@ -49,13 +49,13 @@
 #include "ixheaacd_freq_sca.h"
 #include "ixheaacd_intrinsics.h"
 
-WORD32 ixheaacd_samp_rate_table[12] = {92017, 75132, 55426, 46009,
-                                       37566, 27713, 23004, 18783,
-                                       13856, 11502, 9391,  16428320};
+const WORD32 ixheaacd_samp_rate_table[12] = {92017, 75132, 55426, 46009,
+                                             37566, 27713, 23004, 18783,
+                                             13856, 11502, 9391,  16428320};
 
-WORD32 ixheaacd_v_offset_40[16] = {3 + 1, 2 + 1, 2 + 1, 2 + 1, 2 + 1, 2 + 1,
-                                   2 + 1, 2 + 1, 2 + 1, 2 + 1, 2 + 1, 2 + 1,
-                                   2 + 1, 2 + 1, 1 + 1, 0};
+const WORD32 ixheaacd_v_offset_40[16] = {
+    3 + 1, 2 + 1, 2 + 1, 2 + 1, 2 + 1, 2 + 1, 2 + 1, 2 + 1,
+    2 + 1, 2 + 1, 2 + 1, 2 + 1, 2 + 1, 2 + 1, 1 + 1, 0};
 
 static WORD32 ixheaacd_int_div(WORD32 num, WORD32 den) {
   if (den != 0) {
@@ -105,38 +105,9 @@ VOID ixheaacd_aac_shellsort(WORD16 *in, WORD32 n) {
 }
 
 WORD32
-ixheaacd_calc_start_band(WORD32 fs, const WORD32 start_freq,
+ixheaacd_calc_start_band(WORD32 fs_mapped, const WORD32 start_freq,
                          FLOAT32 upsamp_fac) {
   WORD32 k0_min;
-  WORD32 fs_mapped = 0;
-
-  if (upsamp_fac == 4) {
-    fs = fs / 2;
-  }
-
-  if (fs >= 0 && fs < 18783) {
-    fs_mapped = 16000;
-  } else if (fs >= 18783 && fs < 23004) {
-    fs_mapped = 22050;
-  } else if (fs >= 23004 && fs < 27713) {
-    fs_mapped = 24000;
-  } else if (fs >= 27713 && fs < 35777) {
-    fs_mapped = 32000;
-  } else if (fs >= 35777 && fs < 42000) {
-    fs_mapped = 40000;
-  } else if (fs >= 42000 && fs < 46009) {
-    fs_mapped = 44100;
-  } else if (fs >= 46009 && fs < 55426) {
-    fs_mapped = 48000;
-  } else if (fs >= 55426 && fs < 75132) {
-    fs_mapped = 64000;
-  } else if (fs >= 75132 && fs < 92017) {
-    fs_mapped = 88200;
-  } else if (fs >= 92017) {
-    fs_mapped = 96000;
-  } else {
-    return -1;
-  }
 
   if (upsamp_fac == 4) {
     if (fs_mapped < 32000) {
@@ -253,16 +224,51 @@ ixheaacd_calc_stop_band(WORD32 fs, const WORD32 stop_freq, FLOAT32 upsamp_fac) {
 
   result = k1_min;
   for (i = 0; i < stop_freq; i++) {
-    result = result + arr_diff_stop_freq[i];
+    result = ixheaacd_add32_sat(result, arr_diff_stop_freq[i]);
   }
 
   return (result);
 }
-void ixheaacd_calc_k0_k2_bands(const WORD32 samp_freq, const WORD32 start_freq,
-                               const WORD32 stop_freq, FLOAT32 upsamp_fac,
-                               WORD16 *ptr_k0, WORD16 *ptr_k2) {
+IA_ERRORCODE ixheaacd_calc_k0_k2_bands(const WORD32 samp_freq,
+                                       const WORD32 start_freq,
+                                       const WORD32 stop_freq,
+                                       FLOAT32 upsamp_fac, WORD16 *ptr_k0,
+                                       WORD16 *ptr_k2) {
+  IA_ERRORCODE err_code = IA_NO_ERROR;
+
+  WORD32 fs_mapped = 0;
+  WORD32 fs = samp_freq;
+
+  if (upsamp_fac == 4) {
+    fs = fs / 2;
+  }
+
+  if (fs >= 0 && fs < 18783) {
+    fs_mapped = 16000;
+  } else if (fs >= 18783 && fs < 23004) {
+    fs_mapped = 22050;
+  } else if (fs >= 23004 && fs < 27713) {
+    fs_mapped = 24000;
+  } else if (fs >= 27713 && fs < 35777) {
+    fs_mapped = 32000;
+  } else if (fs >= 35777 && fs < 42000) {
+    fs_mapped = 40000;
+  } else if (fs >= 42000 && fs < 46009) {
+    fs_mapped = 44100;
+  } else if (fs >= 46009 && fs < 55426) {
+    fs_mapped = 48000;
+  } else if (fs >= 55426 && fs < 75132) {
+    fs_mapped = 64000;
+  } else if (fs >= 75132 && fs < 92017) {
+    fs_mapped = 88200;
+  } else if (fs >= 92017) {
+    fs_mapped = 96000;
+  } else {
+    return -1;
+  }
+
   /* Update start_freq struct */
-  *ptr_k0 = ixheaacd_calc_start_band(samp_freq, start_freq, upsamp_fac);
+  *ptr_k0 = ixheaacd_calc_start_band(fs_mapped, start_freq, upsamp_fac);
 
   /*Update stop_freq struct */
   if (stop_freq < 14) {
@@ -277,9 +283,10 @@ void ixheaacd_calc_k0_k2_bands(const WORD32 samp_freq, const WORD32 start_freq,
   if (*ptr_k2 > 64) {
     *ptr_k2 = 64;
   }
+  return err_code;
 }
 
-WORD16 ixheaacd_calc_master_frq_bnd_tbl(
+IA_ERRORCODE ixheaacd_calc_master_frq_bnd_tbl(
     ia_freq_band_data_struct *pstr_freq_band_data,
     ia_sbr_header_data_struct *ptr_header_data,
     ixheaacd_misc_tables *pstr_common_tables) {
@@ -297,13 +304,16 @@ WORD16 ixheaacd_calc_master_frq_bnd_tbl(
   WORD16 upsamp_fac = ptr_header_data->upsamp_fac;
   WORD16 *f_master_tbl = pstr_freq_band_data->f_master_tbl;
   WORD16 num_mf_bands;
+  IA_ERRORCODE err_code = IA_NO_ERROR;
 
   k1 = 0;
   incr = 0;
   dk = 0;
 
-  ixheaacd_calc_k0_k2_bands(fs, ptr_header_data->start_freq,
-                            ptr_header_data->stop_freq, upsamp_fac, &k0, &k2);
+  err_code = ixheaacd_calc_k0_k2_bands(fs, ptr_header_data->start_freq,
+                                       ptr_header_data->stop_freq, upsamp_fac,
+                                       &k0, &k2);
+  if (err_code) return err_code;
 
   if (k2 > NO_SYNTHESIS_CHANNELS) {
     k2 = NO_SYNTHESIS_CHANNELS;
@@ -401,8 +411,7 @@ WORD16 ixheaacd_calc_master_frq_bnd_tbl(
       num_bands1 = bands * num_bands1;
 
       if (ptr_header_data->alter_scale) {
-        num_bands1 = num_bands1 * (0x6276);
-        num_bands1 = num_bands1 >> 15;
+        num_bands1 = (WORD32)(((WORD64)num_bands1 * (0x6276)) >> 15);
       }
       num_bands1 = num_bands1 + 0x1000;
 
@@ -420,10 +429,6 @@ WORD16 ixheaacd_calc_master_frq_bnd_tbl(
       ixheaacd_calc_bands(vec_dk0, k0, k1, (WORD16)num_bands0);
 
       ixheaacd_aac_shellsort(vec_dk0, num_bands0);
-
-      if (vec_dk0[0] == 0) {
-        return -1;
-      }
 
       f_master_tbl[0] = k0;
 
@@ -610,7 +615,7 @@ WORD32 ixheaacd_derive_noise_freq_bnd_tbl(
   kx = pstr_freq_band_data->freq_band_table[HIGH][0];
 
   if (ptr_header_data->noise_bands == 0) {
-    pstr_freq_band_data->num_nf_bands = 1;
+    temp = 1;
   } else {
     temp = pstr_common_tables->log_dual_is_table[k2] -
            pstr_common_tables->log_dual_is_table[kx];
@@ -620,13 +625,12 @@ WORD32 ixheaacd_derive_noise_freq_bnd_tbl(
     if (temp == 0) {
       temp = 1;
     }
-    pstr_freq_band_data->num_nf_bands = temp;
   }
-  pstr_freq_band_data->num_if_bands = pstr_freq_band_data->num_nf_bands;
-
-  if (pstr_freq_band_data->num_nf_bands > MAX_NOISE_COEFFS) {
+  if (temp > MAX_NOISE_COEFFS) {
     return -1;
   }
+  pstr_freq_band_data->num_nf_bands = temp;
+  pstr_freq_band_data->num_if_bands = pstr_freq_band_data->num_nf_bands;
   {
     WORD16 i_k, k;
     WORD16 num, den;

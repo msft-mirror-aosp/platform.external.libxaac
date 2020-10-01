@@ -18,22 +18,22 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include <stdlib.h>
-#include <ixheaacd_type_def.h>
+#include "ixheaacd_type_def.h"
 #include "ixheaacd_error_standards.h"
 #include "ixheaacd_constants.h"
-#include <ixheaacd_basic_ops32.h>
-#include <ixheaacd_basic_ops16.h>
-#include <ixheaacd_basic_ops40.h>
+#include "ixheaacd_basic_ops32.h"
+#include "ixheaacd_basic_ops16.h"
+#include "ixheaacd_basic_ops40.h"
 #include "ixheaacd_sbr_common.h"
 
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_defines.h"
-#include <ixheaacd_aac_rom.h>
+#include "ixheaacd_aac_rom.h"
 
 #include "ixheaacd_sbrdecsettings.h"
 #include "ixheaacd_sbr_scale.h"
 #include "ixheaacd_env_extr_part.h"
-#include <ixheaacd_sbr_rom.h>
+#include "ixheaacd_sbr_rom.h"
 
 #include "ixheaacd_lpp_tran.h"
 #include "ixheaacd_hybrid.h"
@@ -316,7 +316,7 @@ WORD32 ixheaacd_find_syncword(ia_adts_header_struct *adts,
 WORD32 ixheaacd_adtsframe(ia_adts_header_struct *adts,
                           struct ia_bit_buf_struct *it_bit_buff) {
   WORD32 tmp;
-
+  IA_ERRORCODE err = IA_NO_ERROR;
   WORD32 crc_reg;
   ia_adts_crc_info_struct *ptr_adts_crc_info = it_bit_buff->pstr_adts_crc_info;
   ptr_adts_crc_info->crc_active = 1;
@@ -324,7 +324,8 @@ WORD32 ixheaacd_adtsframe(ia_adts_header_struct *adts,
   ixheaacd_read_bidirection(it_bit_buff, -12);
   crc_reg = ixheaacd_adts_crc_start_reg(ptr_adts_crc_info, it_bit_buff,
                                         CRC_ADTS_HEADER_LEN);
-  ixheaacd_find_syncword(adts, it_bit_buff);
+  err = ixheaacd_find_syncword(adts, it_bit_buff);
+  if (err) return err;
 
   tmp = ixheaacd_read_bits_buf(it_bit_buff, 10);
 
@@ -488,6 +489,8 @@ WORD32 ixheaacd_ga_hdr_dec(ia_aac_dec_state_struct *aac_state_struct,
   WORD32 tmp;
   WORD32 cnt_bits = it_bit_buff->cnt_bits;
   WORD32 dummy = 0;
+  UWORD32 aot_init;
+
   ia_audio_specific_config_struct *pstr_audio_specific_config;
 
   memset(aac_state_struct->ia_audio_specific_config, 0,
@@ -500,6 +503,8 @@ WORD32 ixheaacd_ga_hdr_dec(ia_aac_dec_state_struct *aac_state_struct,
 
   aac_state_struct->p_config->str_prog_config.alignment_bits =
       it_bit_buff->bit_pos;
+
+  aot_init = aac_state_struct->audio_object_type;
 
   aac_state_struct->audio_object_type = ixheaacd_read_bits_buf(it_bit_buff, 5);
 
@@ -539,6 +544,10 @@ WORD32 ixheaacd_ga_hdr_dec(ia_aac_dec_state_struct *aac_state_struct,
 
     aac_state_struct->audio_object_type =
         ixheaacd_read_bits_buf(it_bit_buff, 5);
+  }
+
+  if (aac_state_struct->header_dec_done || aac_state_struct->ui_init_done) {
+    if (aac_state_struct->audio_object_type != aot_init) return IA_FATAL_ERROR;
   }
 
   if (((aac_state_struct->audio_object_type >= AOT_AAC_MAIN &&
@@ -995,9 +1004,11 @@ WORD32 ixheaacd_aac_headerdecode(
             (header_len - bytes_taken)) {
           ia_adts_header_struct adts_loc = {0};
 
-          handle_bit_buff = ixheaacd_create_init_bit_buf(
+          ixheaacd_create_init_bit_buf(
               &it_bit_buff, (UWORD8 *)(buffer + adts.aac_frame_length),
-              (WORD16)(header_len - adts.aac_frame_length));
+              (WORD16)(header_len - bytes_taken - adts.aac_frame_length));
+
+          handle_bit_buff = &it_bit_buff;
 
           adts_loc.sync_word =
               (WORD16)ixheaacd_read_bits_buf(handle_bit_buff, 12);

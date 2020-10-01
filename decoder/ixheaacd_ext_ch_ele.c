@@ -21,7 +21,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <ixheaacd_type_def.h>
+#include "ixheaacd_type_def.h"
 
 #include "ixheaacd_cnst.h"
 
@@ -50,9 +50,8 @@
 #include "ixheaacd_bit_extract.h"
 
 #include "ixheaacd_constants.h"
-#include <ixheaacd_type_def.h>
-#include <ixheaacd_basic_ops32.h>
-#include <ixheaacd_basic_ops40.h>
+#include "ixheaacd_basic_ops32.h"
+#include "ixheaacd_basic_ops40.h"
 
 #include "ixheaacd_func_def.h"
 
@@ -70,7 +69,7 @@ const WORD16 ixheaacd_mdst_fcoeff_long_sin_kbd[] = {-1499, -1876, -17718, 0,
 const WORD16 ixheaacd_mdst_fcoeff_long_kbd_sin[] = {-1499, 1876,  -17718, 0,
                                                     17718, -1876, 1499};
 
-const WORD16 *ixheaacd_mdst_fcoeff_longshort_curr[2][2] = {
+const WORD16 *const ixheaacd_mdst_fcoeff_longshort_curr[2][2] = {
     {ixheaacd_mdst_fcoeff_long_sin, ixheaacd_mdst_fcoeff_long_sin_kbd},
     {ixheaacd_mdst_fcoeff_long_kbd_sin, ixheaacd_mdst_fcoeff_long_kbd}};
 
@@ -83,7 +82,7 @@ const WORD16 ixheaacd_mdst_fcoeff_start_sin_kbd[] = {-3433, -3447, -18608, 0,
 const WORD16 ixheaacd_mdst_fcoeff_start_kbd_sin[] = {-4863, -1525, -19918, 0,
                                                      19918, 1525,  4863};
 
-const WORD16 *ixheaacd_mdst_fcoeff_start_curr[2][2] = {
+const WORD16 *const ixheaacd_mdst_fcoeff_start_curr[2][2] = {
     {ixheaacd_mdst_fcoeff_start_sin, ixheaacd_mdst_fcoeff_start_sin_kbd},
     {ixheaacd_mdst_fcoeff_start_kbd_sin, ixheaacd_mdst_fcoeff_start_kbd}};
 
@@ -96,7 +95,7 @@ const WORD16 ixheaacd_mdst_fcoeff_stop_sin_kbd[] = {-4863, 1525,  -19918, 0,
 const WORD16 ixheaacd_mdst_fcoeff_stop_kbd_sin[] = {-3433, 3447,  -18608, 0,
                                                     18608, -3447, 3433};
 
-const WORD16 *ixheaacd_mdst_fcoeff_stop_cur[2][2] = {
+const WORD16 *const ixheaacd_mdst_fcoeff_stop_cur[2][2] = {
     {ixheaacd_mdst_fcoeff_stop_sin, ixheaacd_mdst_fcoeff_stop_sin_kbd},
     {ixheaacd_mdst_fcoeff_stop_kbd_sin, ixheaacd_mdst_fcoeff_stop_kbd}};
 
@@ -109,7 +108,7 @@ const WORD16 ixheaacd_mdst_fcoeff_stopstart_sin_kbd[] = {-6797, -46, -20808, 0,
 const WORD16 ixheaacd_mdst_fcoeff_stopstart_kbd_sin[] = {-6797, 46, -20808, 0,
                                                          20808, 46, 6797};
 
-const WORD16 *ixheaacd_mdst_fcoeff_stopstart_cur[2][2] = {
+const WORD16 *const ixheaacd_mdst_fcoeff_stopstart_cur[2][2] = {
     {ixheaacd_mdst_fcoeff_stopstart_sin,
      ixheaacd_mdst_fcoeff_stopstart_sin_kbd},
     {ixheaacd_mdst_fcoeff_stopstart_kbd_sin,
@@ -125,10 +124,10 @@ const WORD16 ixheaacd_mdst_fcoeff_stop_stopstart_left_sin[] = {
 const WORD16 ixheaacd_mdst_fcoeff_stop_stopstart_left_kbd[] = {
     857, 866, 871, 873, 871, 866, 857};
 
-const WORD16 *ixheaacd_mdst_fcoeff_l_s_start_left_prev[2] = {
+const WORD16 *const ixheaacd_mdst_fcoeff_l_s_start_left_prev[2] = {
     ixheaacd_mdst_fcoeff_l_s_start_left_sin,
     ixheaacd_mdst_fcoeff_l_s_start_left_kbd};
-const WORD16 *ixheaacd_mdst_fcoeff_stop_stopstart_left_prev[2] = {
+const WORD16 *const ixheaacd_mdst_fcoeff_stop_stopstart_left_prev[2] = {
     ixheaacd_mdst_fcoeff_stop_stopstart_left_sin,
     ixheaacd_mdst_fcoeff_stop_stopstart_left_kbd};
 
@@ -148,12 +147,12 @@ void ixheaacd_usac_cplx_save_prev(ia_sfb_info_struct *info, WORD32 *l_spec,
          sizeof(WORD32) * info->bins_per_sbk);
 }
 
-static WORD32 ixheaacd_cplx_pred_data(
+static VOID ixheaacd_cplx_pred_data(
     ia_usac_data_struct *usac_data,
     ia_usac_tmp_core_coder_struct *pstr_core_coder, WORD32 num_window_groups,
     ia_bit_buf_struct *it_bit_buff) {
   ia_huff_code_book_struct *ptr_huff_code_book = &ixheaacd_book;
-  ia_huff_code_word_struct *ptr_huff_code_word =
+  const ia_huff_code_word_struct *ptr_huff_code_word =
       ptr_huff_code_book->pstr_huff_code_word;
   WORD32 cplx_pred_all;
   WORD32 delta_code_time;
@@ -252,7 +251,7 @@ static WORD32 ixheaacd_cplx_pred_data(
     }
   }
 
-  return 1;
+  return;
 }
 
 static WORD32 ixheaacd_read_ms_mask(
@@ -371,14 +370,12 @@ static VOID ixheaacd_filter_and_add(const WORD32 *in, const WORD32 length,
   out++;
 
   for (i = 3; i < length - 4; i += 2) {
-    sum = 0;
-    sum = ixheaacd_mac32x32in64_7(sum, &in[i - 3], filter);
+    sum = ixheaacd_mac32x32in64_7(&in[i - 3], filter);
     *out = ixheaacd_add32_sat(
         *out, ixheaacd_sat64_32((((WORD64)sum * (WORD64)factor_odd) >> 15)));
     out++;
 
-    sum = 0;
-    sum = ixheaacd_mac32x32in64_7(sum, &in[i - 2], filter);
+    sum = ixheaacd_mac32x32in64_7(&in[i - 2], filter);
     *out = ixheaacd_add32_sat(
         *out, ixheaacd_sat64_32((((WORD64)sum * (WORD64)factor_even) >> 15)));
     out++;
@@ -412,15 +409,13 @@ static VOID ixheaacd_filter_and_add(const WORD32 *in, const WORD32 length,
       *out, ixheaacd_sat64_32((((WORD64)sum * (WORD64)factor_odd) >> 15)));
 }
 
-static WORD32 ixheaacd_estimate_dmx_im(const WORD32 *dmx_re,
-                                       const WORD32 *dmx_re_prev,
-                                       WORD32 *dmx_im,
-                                       ia_sfb_info_struct *pstr_sfb_info,
-                                       WORD32 window, const WORD32 w_shape,
-                                       const WORD32 prev_w_shape) {
+static VOID ixheaacd_estimate_dmx_im(const WORD32 *dmx_re,
+                                     const WORD32 *dmx_re_prev, WORD32 *dmx_im,
+                                     ia_sfb_info_struct *pstr_sfb_info,
+                                     WORD32 window, const WORD32 w_shape,
+                                     const WORD32 prev_w_shape) {
   WORD32 i;
   const WORD16 *mdst_fcoeff_curr, *mdst_fcoeff_prev;
-  WORD32 err = 0;
 
   switch (window) {
     case ONLY_LONG_SEQUENCE:
@@ -464,10 +459,10 @@ static WORD32 ixheaacd_estimate_dmx_im(const WORD32 *dmx_re,
     dmx_re += pstr_sfb_info->bins_per_sbk;
     dmx_im += pstr_sfb_info->bins_per_sbk;
   }
-  return err;
+  return;
 }
 
-static WORD32 ixheaacd_cplx_pred_upmixing(
+static VOID ixheaacd_cplx_pred_upmixing(
     ia_usac_data_struct *usac_data, WORD32 *l_spec, WORD32 *r_spec,
     ia_usac_tmp_core_coder_struct *pstr_core_coder, WORD32 chn) {
   ia_sfb_info_struct *pstr_sfb_info = usac_data->pstr_sfb_info[chn];
@@ -476,9 +471,8 @@ static WORD32 ixheaacd_cplx_pred_upmixing(
 
   WORD32 grp, sfb, grp_len, i = 0, k;
   WORD32 *dmx_re_prev = usac_data->dmx_re_prev;
-  const WORD32(*alpha_q_re)[SFB_NUM_MAX] = usac_data->alpha_q_re;
-  const WORD32(*alpha_q_im)[SFB_NUM_MAX] = usac_data->alpha_q_im;
-  WORD32 err = 0;
+  WORD32(*alpha_q_re)[SFB_NUM_MAX] = usac_data->alpha_q_re;
+  WORD32(*alpha_q_im)[SFB_NUM_MAX] = usac_data->alpha_q_im;
 
   UWORD8(*cplx_pred_used)[SFB_NUM_MAX] = usac_data->cplx_pred_used;
 
@@ -513,11 +507,10 @@ static WORD32 ixheaacd_cplx_pred_upmixing(
   if (pstr_core_coder->complex_coef) {
     WORD32 *p_dmx_re_prev =
         pstr_core_coder->use_prev_frame ? dmx_re_prev : NULL;
-    err = ixheaacd_estimate_dmx_im(dmx_re, p_dmx_re_prev, dmx_im, pstr_sfb_info,
-                                   usac_data->window_sequence[chn],
-                                   usac_data->window_shape[chn],
-                                   usac_data->window_shape_prev[chn]);
-    if (err == -1) return err;
+    ixheaacd_estimate_dmx_im(dmx_re, p_dmx_re_prev, dmx_im, pstr_sfb_info,
+                             usac_data->window_sequence[chn],
+                             usac_data->window_shape[chn],
+                             usac_data->window_shape_prev[chn]);
 
     for (grp = 0, i = 0; grp < pstr_sfb_info->num_groups; grp++) {
       for (grp_len = 0; grp_len < pstr_sfb_info->group_len[grp]; grp_len++) {
@@ -570,7 +563,7 @@ static WORD32 ixheaacd_cplx_pred_upmixing(
     }
   }
 
-  return err;
+  return;
 }
 
 static VOID ixheaacd_cplx_prev_mdct_dmx(ia_sfb_info_struct *pstr_sfb_info,
@@ -867,10 +860,9 @@ WORD32 ixheaacd_core_coder_data(WORD32 id, ia_usac_data_struct *usac_data,
   if (nr_core_coder_channels == 2 && pstr_core_coder->core_mode[0] == 0 &&
       pstr_core_coder->core_mode[1] == 0) {
     if (pstr_core_coder->ms_mask_present[0] == 3) {
-      err_code = ixheaacd_cplx_pred_upmixing(
-          usac_data, usac_data->coef_fix[left], usac_data->coef_fix[right],
-          pstr_core_coder, left);
-      if (err_code == -1) return err_code;
+      ixheaacd_cplx_pred_upmixing(usac_data, usac_data->coef_fix[left],
+                                  usac_data->coef_fix[right], pstr_core_coder,
+                                  left);
 
     } else if (pstr_core_coder->ms_mask_present[0] > 0) {
       ixheaacd_ms_stereo(

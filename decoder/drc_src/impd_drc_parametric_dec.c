@@ -41,7 +41,7 @@
 WORD32 impd_init_parametric_drc(
     WORD32 drc_frame_size, WORD32 sampling_rate, WORD32 sub_band_domain_mode,
     ia_parametric_drc_params_struct* p_parametricdrc_params) {
-  WORD32 sub_band_count_tbl[4] = {0, 64, 71, 256};
+  static const WORD32 sub_band_count_tbl[4] = {0, 64, 71, 256};
   p_parametricdrc_params->drc_frame_size = drc_frame_size;
   p_parametricdrc_params->sampling_rate = sampling_rate;
   p_parametricdrc_params->sub_band_domain_mode = sub_band_domain_mode;
@@ -478,9 +478,9 @@ WORD32 impd_init_parametric_drc_after_config(
       }
     }
 
-    impd_init_parametric_drcInstance(pstr_drc_config, instance_idx,
-                                     ch_count_from_dwnmix_id,
-                                     p_parametricdrc_params, mem_ptr);
+    err = impd_init_parametric_drcInstance(pstr_drc_config, instance_idx,
+                                           ch_count_from_dwnmix_id,
+                                           p_parametricdrc_params, mem_ptr);
     if (err) return (err);
   }
 
@@ -568,7 +568,7 @@ WORD32 impd_init_lvl_est_filt_subband(
   FLOAT32 w0, alpha, sinw0, cosw0;
   FLOAT32 b0, b1, b2, a0, a1, a2;
   FLOAT32 num_real, num_imag, den_real, den_imag;
-  FLOAT32* f_bands_nrm;
+  const FLOAT32* f_bands_nrm;
   WORD32 b;
   WORD32 i;
   const FLOAT32* ptr_samp_tbl;
@@ -1027,7 +1027,7 @@ WORD32 impd_parametric_ffwd_type_drc_process(
   return 0;
 }
 
-WORD32 impd_parametric_lim_type_drc_process(
+VOID impd_parametric_lim_type_drc_process(
     FLOAT32* samples[], FLOAT32 loudness_normalization_gain_db,
     ia_parametric_drc_type_lim_params_struct*
         pstr_parametric_lim_type_drc_params,
@@ -1102,5 +1102,5 @@ WORD32 impd_parametric_lim_type_drc_process(
 
   pstr_parametric_lim_type_drc_params->cor = gain_modified;
   pstr_parametric_lim_type_drc_params->smooth_state_0 = pre_smoothed_gain;
-  return 0;
+  return;
 }

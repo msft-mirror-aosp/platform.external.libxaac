@@ -24,7 +24,7 @@
 #include <math.h>
 #include <string.h>
 
-#include <ixheaacd_type_def.h>
+#include "ixheaacd_type_def.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_interface.h"
 #include "ixheaacd_tns_usac.h"
@@ -46,8 +46,8 @@
 #include "ixheaacd_windows.h"
 #include "ixheaacd_acelp_com.h"
 #include "ixheaacd_constants.h"
-#include <ixheaacd_basic_ops32.h>
-#include <ixheaacd_basic_ops40.h>
+#include "ixheaacd_basic_ops32.h"
+#include "ixheaacd_basic_ops40.h"
 
 #define LSF_GAP_F 50.0f
 #define FREQ_MAX_F 6400.0f
@@ -57,7 +57,7 @@ extern const FLOAT32 lsf_init[ORDER];
 
 extern const FLOAT32 ixheaacd_fir_lp_filt[1 + FILTER_DELAY];
 
-WORD32 ixheaacd_pow_10_i_by_128[128] = {
+const WORD32 ixheaacd_pow_10_i_by_128[128] = {
     16384,     17788,     19312,     20968,     22765,     24716,     26835,
     29135,     31632,     34343,     37287,     40483,     43953,     47720,
     51810,     56251,     61072,     66307,     71990,     78161,     84860,
@@ -137,6 +137,19 @@ void ixheaacd_reset_acelp_data_fix(ia_usac_data_struct *usac_data,
     for (i = 0; i < (usac_data->ccfl) / 2 - fac_length; i++) {
       ptr_overlap_buf[(usac_data->ccfl) / 2 + fac_length + i] = 0;
     }
+
+    if (ptr_overlap_buf != NULL) {
+      for (i = 0; i < (usac_data->len_subfrm) / 2 - fac_length; i++) {
+        st->exc_prev[i] = 0.0f;
+      }
+      for (i = 0; i < 2 * fac_length + 1; i++) {
+        st->exc_prev[(usac_data->len_subfrm) / 2 - fac_length + i] =
+            ptr_overlap_buf[i + usac_data->ccfl / 2 - fac_length - 1] /
+            (float)(16384);
+      }
+    } else {
+      ixheaacd_memset(st->exc_prev, 1 + (2 * FAC_LENGTH));
+    }
   }
 
   return;
@@ -155,7 +168,6 @@ VOID ixheaacd_fix2flt_data(ia_usac_data_struct *usac_data,
   }
 
   ixheaacd_memset(st->lp_flt_coeff_a_prev, 2 * (ORDER + 1));
-  ixheaacd_memset(st->exc_prev, 1 + (2 * FAC_LENGTH));
   ixheaacd_memset(st->xcitation_prev, MAX_PITCH + INTER_LP_FIL_ORDER + 1);
   ixheaacd_memset(st->synth_prev, MAX_PITCH + SYNTH_DELAY_LMAX);
   ixheaacd_memset(st->bpf_prev, FILTER_DELAY + LEN_SUBFR);
@@ -421,10 +433,10 @@ WORD32 ixheaacd_lpd_dec(ia_usac_data_struct *usac_data,
       memcpy(ptr_scratch, &pstr_td_frame_data->fac_data[0],
              129 * sizeof(WORD32));
 
-      for (i = 0; i < 64; i++) {
+      for (i = 0; i < fac_length / 2; i++) {
         pstr_td_frame_data->fac_data[i] = ptr_scratch[2 * i + 1] << 16;
-        pstr_td_frame_data->fac_data[64 + i] = ptr_scratch[fac_length - 2 * i]
-                                               << 16;
+        pstr_td_frame_data->fac_data[fac_length / 2 + i] =
+            ptr_scratch[fac_length - 2 * i] << 16;
       }
 
       err = ixheaacd_fwd_alias_cancel_tool(usac_data, pstr_td_frame_data,
@@ -505,8 +517,9 @@ WORD32 ixheaacd_lpd_dec(ia_usac_data_struct *usac_data,
       ixheaacd_interpolation_lsp_params(st->lspold, lsp_curr, lp_flt_coff_a,
                                         num_subfr);
 
-      ixheaacd_acelp_alias_cnx(usac_data, pstr_td_frame_data, k, lp_flt_coff_a,
-                               stability_factor, st);
+      err = ixheaacd_acelp_alias_cnx(usac_data, pstr_td_frame_data, k,
+                                     lp_flt_coff_a, stability_factor, st);
+      if (err) return err;
 
       if ((st->mode_prev != 0) && bpf_control_info) {
         i = (k * num_subfr) + num_subfr_by2;
@@ -533,8 +546,9 @@ WORD32 ixheaacd_lpd_dec(ia_usac_data_struct *usac_data,
       ixheaacd_lpc_coef_gen(st->lspold, lsp_curr, lp_flt_coff_a, n_subfr,
                             ORDER);
 
-      ixheaacd_tcx_mdct(usac_data, pstr_td_frame_data, k, lp_flt_coff_a,
-                        subfr_len, st);
+      err = ixheaacd_tcx_mdct(usac_data, pstr_td_frame_data, k, lp_flt_coff_a,
+                              subfr_len, st);
+      if (err) return err;
       k += (1 << (mode - 1));
     }
 
@@ -596,9 +610,9 @@ WORD32 ixheaacd_lpd_dec(ia_usac_data_struct *usac_data,
   return err;
 }
 
-WORD32 ixheaacd_lpd_dec_update(ia_usac_lpd_decoder_handle tddec,
-                               ia_usac_data_struct *usac_data, WORD32 i_ch) {
-  WORD32 err = 0, i, k;
+VOID ixheaacd_lpd_dec_update(ia_usac_lpd_decoder_handle tddec,
+                             ia_usac_data_struct *usac_data, WORD32 i_ch) {
+  WORD32 i, k;
 
   WORD32 *ptr_overlap = &usac_data->overlap_data_ptr[i_ch][0];
   WORD32 len_fr, lpd_sbf_len, lpd_delay, num_subfr_by2, synth_delay, fac_length;
@@ -637,7 +651,7 @@ WORD32 ixheaacd_lpd_dec_update(ia_usac_lpd_decoder_handle tddec,
             (1 + (2 * FAC_LENGTH)) * sizeof(FLOAT32));
   }
 
-  return err;
+  return;
 }
 
 WORD32 ixheaacd_lpd_bpf_fix(ia_usac_data_struct *usac_data,
@@ -707,7 +721,7 @@ WORD32 ixheaacd_lpd_bpf_fix(ia_usac_data_struct *usac_data,
 
   err = ixheaacd_bass_post_filter(synth, pitch, pitch_gain, signal_out,
                                   (lpd_sbf_len + 2) * LEN_SUBFR + LEN_SUBFR,
-                                  len_fr - (lpd_sbf_len + 2) * LEN_SUBFR,
+                                  len_fr - (lpd_sbf_len + 4) * LEN_SUBFR,
                                   st->bpf_prev);
   if (err != 0) return err;
 
