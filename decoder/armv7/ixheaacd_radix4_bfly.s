@@ -22,7 +22,6 @@
 .text
 .p2align 2
         .global ixheaacd_radix4bfly
-	.type ixheaacd_radix4bfly, %function
 
 ixheaacd_radix4bfly:
 

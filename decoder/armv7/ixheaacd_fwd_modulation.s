@@ -24,7 +24,6 @@
  .extern ixheaacd_cos_sin_mod
 .hidden ixheaacd_cos_sin_mod
  .global ixheaacd_fwd_modulation
- .type ixheaacd_fwd_modulation, %function
 ixheaacd_fwd_modulation:
 
     STMFD           sp!, {r3-r9, r12, lr}

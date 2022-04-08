@@ -127,7 +127,8 @@ impd_drc_sel_proc_init_sel_proc_params(
 
   return 0;
 }
-VOID impd_drc_sel_proc_init_interface_params(
+WORD32
+impd_drc_sel_proc_init_interface_params(
     ia_drc_sel_pro_struct* pstr_drc_uni_sel_proc,
     ia_drc_interface_struct* pstr_drc_interface) {
   WORD32 i, j;
@@ -525,5 +526,5 @@ VOID impd_drc_sel_proc_init_interface_params(
     }
   }
 
-  return;
+  return 0;
 }

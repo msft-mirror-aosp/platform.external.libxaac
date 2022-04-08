@@ -23,7 +23,6 @@
 .p2align 2
 
     .global ixheaacd_sbr_imdct_using_fft
-    .type ixheaacd_sbr_imdct_using_fft, %function
 ixheaacd_sbr_imdct_using_fft:
 
     STMFD           sp!, {r4-r12, lr}

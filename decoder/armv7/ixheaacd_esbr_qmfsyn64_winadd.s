@@ -13,7 +13,6 @@
 .text
 .p2align 2
       .global ixheaacd_esbr_qmfsyn64_winadd
-      .type ixheaacd_esbr_qmfsyn64_winadd, %function
 
 ixheaacd_esbr_qmfsyn64_winadd:          @ PROC
 

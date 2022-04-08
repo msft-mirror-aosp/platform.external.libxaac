@@ -66,8 +66,8 @@ typedef struct {
   ia_characteristic_node_coordinate_struct characteristicNodeCoordinate[5];
 } ia_cicp_node_characteristic_param;
 
-VOID impd_init_tbls(const WORD32 num_gain_max_values,
-                    ia_tables_struct* str_tables);
+WORD32
+impd_init_tbls(const WORD32 num_gain_max_values, ia_tables_struct* str_tables);
 
 void impd_gen_delta_time_code_tbl(
     const WORD32 num_gain_max_values,

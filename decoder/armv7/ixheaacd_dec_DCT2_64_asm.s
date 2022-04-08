@@ -29,7 +29,6 @@
 .hidden ixheaacd_sbr_imdct_using_fft
 
         .global ixheaacd_dec_DCT2_64_asm
-        .type ixheaacd_dec_DCT2_64_asm, %function
 
 ixheaacd_dec_DCT2_64_asm:
 

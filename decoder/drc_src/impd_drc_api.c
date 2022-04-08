@@ -152,19 +152,16 @@ IA_ERRORCODE ia_drc_dec_api(pVOID p_ia_drc_dec_obj, WORD32 i_cmd, WORD32 i_idx,
           p_obj_drc->p_state->persistent_ptr =
               (UWORD8 *)p_obj_drc->pp_mem[IA_DRC_PERSIST_IDX] +
               sizeof(ia_drc_state_struct);
-          error_code = impd_drc_set_struct_pointer(p_obj_drc);
-          if (error_code) return error_code;
+          impd_drc_set_struct_pointer(p_obj_drc);
 
           break;
         }
         case IA_CMD_TYPE_INIT_API_PRE_CONFIG_PARAMS: {
-          error_code = impd_drc_set_default_config(p_obj_drc);
-          if (error_code) return error_code;
+          impd_drc_set_default_config(p_obj_drc);
           break;
         }
         case IA_CMD_TYPE_INIT_API_POST_CONFIG_PARAMS: {
-          error_code = impd_drc_fill_mem_tables(p_obj_drc);
-          if (error_code) return error_code;
+          impd_drc_fill_mem_tables(p_obj_drc);
           break;
         }
         case IA_CMD_TYPE_INIT_PROCESS: {

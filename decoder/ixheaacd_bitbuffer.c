@@ -147,8 +147,8 @@ WORD32 ixheaacd_read_bits_buf(ia_bit_buf_struct *it_bit_buff, WORD no_of_bits) {
   return ret_val;
 }
 
-VOID ixheaacd_aac_read_byte(UWORD8 **ptr_read_next, WORD32 *bit_pos,
-                            WORD32 *readword) {
+UWORD32 ixheaacd_aac_read_byte(UWORD8 **ptr_read_next, WORD32 *bit_pos,
+                               WORD32 *readword) {
   UWORD8 *v = *ptr_read_next;
   WORD32 bits_consumed = *bit_pos;
 
@@ -160,11 +160,12 @@ VOID ixheaacd_aac_read_byte(UWORD8 **ptr_read_next, WORD32 *bit_pos,
   }
   *bit_pos = bits_consumed;
   *ptr_read_next = v;
-  return;
+  return 1;
 }
 
-VOID ixheaacd_aac_read_byte_corr1(UWORD8 **ptr_read_next, WORD32 *ptr_bit_pos,
-                                  WORD32 *readword, UWORD8 *p_bit_buf_end) {
+UWORD32 ixheaacd_aac_read_byte_corr1(UWORD8 **ptr_read_next,
+                                     WORD32 *ptr_bit_pos, WORD32 *readword,
+                                     UWORD8 *p_bit_buf_end) {
   UWORD8 *v = *ptr_read_next;
   WORD32 bits_consumed = *ptr_bit_pos;
   WORD32 temp_bit_count = 0;
@@ -180,11 +181,11 @@ VOID ixheaacd_aac_read_byte_corr1(UWORD8 **ptr_read_next, WORD32 *ptr_bit_pos,
   }
   *ptr_bit_pos = bits_consumed + temp_bit_count;
   *ptr_read_next = v;
-  return;
+  return 1;
 }
 
-VOID ixheaacd_aac_read_byte_corr(UWORD8 **ptr_read_next, WORD32 *ptr_bit_pos,
-                                 WORD32 *readword, UWORD8 *p_bit_buf_end) {
+UWORD32 ixheaacd_aac_read_byte_corr(UWORD8 **ptr_read_next, WORD32 *ptr_bit_pos,
+                                    WORD32 *readword, UWORD8 *p_bit_buf_end) {
   UWORD8 *v = *ptr_read_next;
   WORD32 bits_consumed = *ptr_bit_pos;
 
@@ -200,7 +201,7 @@ VOID ixheaacd_aac_read_byte_corr(UWORD8 **ptr_read_next, WORD32 *ptr_bit_pos,
   }
   *ptr_bit_pos = bits_consumed;
   *ptr_read_next = v;
-  return;
+  return 1;
 }
 
 WORD32 ixheaacd_aac_read_bit(ia_bit_buf_struct *it_bit_buff) {

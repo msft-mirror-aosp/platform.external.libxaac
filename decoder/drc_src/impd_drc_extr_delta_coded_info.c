@@ -27,11 +27,11 @@
 #include "impd_drc_filter_bank.h"
 #include "impd_drc_rom.h"
 
-VOID impd_init_tbls(const WORD32 num_gain_max_values,
-                    ia_tables_struct* str_tables) {
+WORD32 impd_init_tbls(const WORD32 num_gain_max_values,
+                      ia_tables_struct* str_tables) {
   impd_gen_delta_time_code_tbl(num_gain_max_values,
                                str_tables->delta_time_code_table);
-  return;
+  return (0);
 }
 
 void impd_get_delta_gain_code_tbl(

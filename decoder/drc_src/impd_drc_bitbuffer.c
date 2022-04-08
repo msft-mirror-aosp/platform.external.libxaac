@@ -87,8 +87,9 @@ WORD32 impd_skip_bits_buf(ia_bit_buf_struct* it_bit_buff, WORD no_of_bits) {
   it_bit_buff->bit_pos = (WORD16)bit_pos;
   return no_of_bits;
 }
-VOID impd_create_bit_buf(ia_bit_buf_struct* it_bit_buff,
-                         UWORD8* ptr_bit_buf_base, WORD32 bit_buf_size) {
+ia_bit_buf_struct* impd_create_bit_buf(ia_bit_buf_struct* it_bit_buff,
+                                       UWORD8* ptr_bit_buf_base,
+                                       WORD32 bit_buf_size) {
   it_bit_buff->ptr_bit_buf_base = ptr_bit_buf_base;
   it_bit_buff->ptr_bit_buf_end = ptr_bit_buf_base + bit_buf_size - 1;
 
@@ -99,14 +100,15 @@ VOID impd_create_bit_buf(ia_bit_buf_struct* it_bit_buff,
   it_bit_buff->size = bit_buf_size << 3;
   it_bit_buff->error = 0;
 
-  return;
+  return it_bit_buff;
 }
 
-VOID impd_create_init_bit_buf(ia_bit_buf_struct* it_bit_buff,
-                              UWORD8* ptr_bit_buf_base, WORD32 bit_buf_size) {
+ia_bit_buf_struct* impd_create_init_bit_buf(ia_bit_buf_struct* it_bit_buff,
+                                            UWORD8* ptr_bit_buf_base,
+                                            WORD32 bit_buf_size) {
   impd_create_bit_buf(it_bit_buff, ptr_bit_buf_base, bit_buf_size);
   it_bit_buff->cnt_bits = (bit_buf_size << 3);
-  return;
+  return (it_bit_buff);
 }
 
 WORD32 impd_init_drc_bitstream_dec(ia_drc_bits_dec_struct* p_drc_bs_dec_struct,
@@ -157,8 +159,8 @@ WORD32 impd_init_drc_bitstream_dec(ia_drc_bits_dec_struct* p_drc_bs_dec_struct,
     }
   }
 
-  impd_init_tbls(ia_drc_params_struct->num_gain_values_max_default,
-                 &p_drc_bs_dec_struct->tables_default);
+  err_code = impd_init_tbls(ia_drc_params_struct->num_gain_values_max_default,
+                            &p_drc_bs_dec_struct->tables_default);
 
   return err_code;
 }
@@ -169,7 +171,8 @@ WORD32 impd_process_drc_bitstream_dec_config(
     WORD32 num_bytes) {
   WORD32 err_code = 0;
 
-  impd_create_init_bit_buf(it_bit_buff, bitstream_config, num_bytes);
+  it_bit_buff =
+      impd_create_init_bit_buf(it_bit_buff, bitstream_config, num_bytes);
 
   err_code = impd_parse_drc_config(
       it_bit_buff, &p_drc_bs_dec_struct->ia_drc_params_struct, pstr_drc_config);
@@ -187,7 +190,8 @@ WORD32 impd_process_drc_bitstream_dec_gain(
 
   WORD32 dummy;
 
-  impd_create_init_bit_buf(it_bit_buff, bitstream_gain, num_bytes);
+  it_bit_buff =
+      impd_create_init_bit_buf(it_bit_buff, bitstream_gain, num_bytes);
 
   dummy = impd_read_bits_buf(it_bit_buff, num_bits_offset);
   if (it_bit_buff->error) return it_bit_buff->error;
@@ -212,9 +216,11 @@ WORD32 impd_process_drc_bitstream_dec_loudness_info_set(
     UWORD8* bit_stream_loudness, WORD32 num_bytes_loudness) {
   WORD32 err_code = 0;
 
-  impd_create_init_bit_buf(it_bit_buff, bit_stream_loudness,
-                           num_bytes_loudness);
+  it_bit_buff = impd_create_init_bit_buf(it_bit_buff, bit_stream_loudness,
+                                         num_bytes_loudness);
 
   err_code = impd_parse_loudness_info_set(it_bit_buff, pstr_loudness_info);
-  return err_code;
+  if (err_code) return (err_code);
+
+  return 0;
 }

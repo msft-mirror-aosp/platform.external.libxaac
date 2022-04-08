@@ -376,10 +376,9 @@ WORD32 ixheaacd_usac_process(ia_dec_data_struct *pstr_dec_data,
 
           *num_out_channels = p_state_aac_dec->mps_dec_handle.out_ch_count;
 
-          err = ixheaacd_mps_frame_parsing(
-              &p_state_aac_dec->mps_dec_handle,
-              pstr_usac_data->usac_independency_flg, it_bit_buff);
-          if (err) return err;
+          ixheaacd_mps_frame_parsing(&p_state_aac_dec->mps_dec_handle,
+                                     pstr_usac_data->usac_independency_flg,
+                                     it_bit_buff);
 
           for (ch = 0; ch < nr_core_coder_channels; ch++) {
             ptr_inp[2 * ch] =

@@ -1414,21 +1414,17 @@ impd_dec_gain_modifiers(ia_bit_buf_struct* it_bit_buff, WORD32 version,
           impd_read_bits_buf(it_bit_buff, 1);
       if (it_bit_buff->error) return it_bit_buff->error;
       if (pstr_gain_modifiers->target_characteristic_left_present[b]) {
-        WORD32 tmp_index = impd_read_bits_buf(it_bit_buff, 4);
+        pstr_gain_modifiers->target_characteristic_left_index[b] =
+            impd_read_bits_buf(it_bit_buff, 4);
         if (it_bit_buff->error) return it_bit_buff->error;
-        if (tmp_index >= SPLIT_CHARACTERISTIC_COUNT_MAX)
-          return (UNEXPECTED_ERROR);
-        pstr_gain_modifiers->target_characteristic_left_index[b] = tmp_index;
       }
       pstr_gain_modifiers->target_characteristic_right_present[b] =
           impd_read_bits_buf(it_bit_buff, 1);
       if (it_bit_buff->error) return it_bit_buff->error;
       if (pstr_gain_modifiers->target_characteristic_right_present[b]) {
-        WORD32 tmp_index = impd_read_bits_buf(it_bit_buff, 4);
+        pstr_gain_modifiers->target_characteristic_right_index[b] =
+            impd_read_bits_buf(it_bit_buff, 4);
         if (it_bit_buff->error) return it_bit_buff->error;
-        if (tmp_index >= SPLIT_CHARACTERISTIC_COUNT_MAX)
-          return (UNEXPECTED_ERROR);
-        pstr_gain_modifiers->target_characteristic_right_index[b] = tmp_index;
       }
       pstr_gain_modifiers->gain_scaling_flag[b] =
           impd_read_bits_buf(it_bit_buff, 1);
@@ -1723,10 +1719,12 @@ impd_drc_parse_coeff(
                 .num_gain_max_values >
             (N_DELTA_TIME_CODE_TABLE_ENTRIES_MAX / 2 - 1))
           return (UNEXPECTED_ERROR);
-        impd_init_tbls(str_p_loc_drc_coefficients_uni_drc->gain_set_params[i]
-                           .num_gain_max_values,
-                       &(str_p_loc_drc_coefficients_uni_drc->gain_set_params[i]
-                             .str_tables));
+        err = impd_init_tbls(
+            str_p_loc_drc_coefficients_uni_drc->gain_set_params[i]
+                .num_gain_max_values,
+            &(str_p_loc_drc_coefficients_uni_drc->gain_set_params[i]
+                  .str_tables));
+        if (err) return (err);
       }
       gain_sequence_count +=
           str_p_loc_drc_coefficients_uni_drc->gain_set_params[i].band_count;
@@ -1901,10 +1899,13 @@ impd_drc_parse_coeff(
                 .num_gain_max_values >
             (N_DELTA_TIME_CODE_TABLE_ENTRIES_MAX / 2 - 1))
           return (UNEXPECTED_ERROR);
-        impd_init_tbls(str_p_loc_drc_coefficients_uni_drc->gain_set_params[i]
-                           .num_gain_max_values,
-                       &(str_p_loc_drc_coefficients_uni_drc->gain_set_params[i]
-                             .str_tables));
+
+        err = impd_init_tbls(
+            str_p_loc_drc_coefficients_uni_drc->gain_set_params[i]
+                .num_gain_max_values,
+            &(str_p_loc_drc_coefficients_uni_drc->gain_set_params[i]
+                  .str_tables));
+        if (err) return (err);
       }
     }
 

@@ -25,7 +25,6 @@
 .text
 .p2align 2
         .global ixheaacd_shiftrountine
-        .type ixheaacd_shiftrountine, %function
 ixheaacd_shiftrountine:
     CMP             r3, #0
     STMFD           sp!, {r4-r7, r12}

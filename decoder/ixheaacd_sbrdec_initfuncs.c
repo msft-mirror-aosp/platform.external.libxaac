@@ -77,7 +77,7 @@ WORD32 ixheaacd_getsize_sbr_persistent() {
   return (ALIGN_SIZE64(sizeof(ia_sbr_pers_struct)));
 }
 
-VOID ixheaacd_esbr_hbe_data_init(
+WORD32 ixheaacd_esbr_hbe_data_init(
     ia_esbr_hbe_txposer_struct *pstr_esbr_hbe_txposer,
     const WORD32 num_aac_samples, WORD32 samp_fac_4_flag,
     const WORD32 num_out_samples, VOID *persistent_hbe_mem) {
@@ -126,7 +126,7 @@ VOID ixheaacd_esbr_hbe_data_init(
     pstr_esbr_hbe_txposer->upsamp_4_flag = samp_fac_4_flag;
   }
 
-  return;
+  return 0;
 }
 
 VOID ixheaacd_set_sbr_persistent_table_pointer(
@@ -552,13 +552,16 @@ ia_handle_sbr_dec_inst_struct ixheaacd_init_sbr(
   if (channel != 1) {
     if (ps_enable) {
       if (audio_object_type == AOT_ER_AAC_ELD)
-        ixheaacd_create_psdec(
+        err = (WORD16)ixheaacd_create_psdec(
             sbr_persistent_mem->str_sbr_dec_inst.pstr_ps_stereo_dec,
             sbr_persistent_mem, &ptr_overlap_buf[512 * 4]);
       else
-        ixheaacd_create_psdec(
+        err = (WORD16)ixheaacd_create_psdec(
             sbr_persistent_mem->str_sbr_dec_inst.pstr_ps_stereo_dec,
             sbr_persistent_mem, ptr_overlap_buf);
+      if (err) {
+        return NULL;
+      }
     }
   }
 
@@ -788,7 +791,7 @@ static PLATFORM_INLINE VOID ixheaacd_init_sbr_prev_framedata(
   ptr_prev_data->max_qmf_subband_aac = 0;
 }
 
-static PLATFORM_INLINE VOID
+static PLATFORM_INLINE WORD32
 ixheaacd_create_hyb_filterbank(ia_hybrid_struct *ptr_hybrid, WORD32 **p_ptr,
                                ia_sbr_tables_struct *sbr_tables_ptr) {
   WORD16 i, ptr_step;
@@ -824,10 +827,10 @@ ixheaacd_create_hyb_filterbank(ia_hybrid_struct *ptr_hybrid, WORD32 **p_ptr,
 
   *p_ptr = ptr;
 
-  return;
+  return 0;
 }
 
-static PLATFORM_INLINE VOID ixheaacd_create_hf_generator(
+static PLATFORM_INLINE WORD16 ixheaacd_create_hf_generator(
     ia_sbr_hf_generator_struct *ptr_hf_gen_str, WORD16 num_columns, WORD16 chan,
     VOID *sbr_persistent_mem_v, WORD32 ps_enable) {
   WORD16 i;
@@ -860,12 +863,12 @@ static PLATFORM_INLINE VOID ixheaacd_create_hf_generator(
   if (chan == 0) {
     ptr_hf_gen_str->pstr_settings->num_columns = num_columns;
   }
-  return;
+  return 0;
 }
 
-VOID ixheaacd_create_psdec(ia_ps_dec_struct *ptr_ps_dec,
-                           VOID *sbr_persistent_mem_v,
-                           WORD32 *ptr_overlap_buf) {
+WORD32 ixheaacd_create_psdec(ia_ps_dec_struct *ptr_ps_dec,
+                             VOID *sbr_persistent_mem_v,
+                             WORD32 *ptr_overlap_buf) {
   ia_sbr_pers_struct *sbr_persistent_mem =
       (ia_sbr_pers_struct *)sbr_persistent_mem_v;
 
@@ -949,10 +952,10 @@ VOID ixheaacd_create_psdec(ia_ps_dec_struct *ptr_ps_dec,
          (NO_IID_GROUPS + 2) * 2 * sizeof(WORD16));
   memset(ptr_ps_dec->h21_h22_vec, 0, sizeof(ptr_ps_dec->h21_h22_vec));
 
-  return;
+  return 0;
 }
 
-static PLATFORM_INLINE VOID ixheaacd_create_cplx_anal_qmfbank(
+static PLATFORM_INLINE WORD32 ixheaacd_create_cplx_anal_qmfbank(
     ia_sbr_qmf_filter_bank_struct *ptr_sbr_qmf,
     ia_sbr_scale_fact_struct *sbr_scale_factor, WORD16 no_bins, WORD16 usb,
     WORD16 chan, WORD16 *sbr_qmf_analy_states, WORD32 *sbr_qmf_analy_states_32,
@@ -1011,10 +1014,10 @@ static PLATFORM_INLINE VOID ixheaacd_create_cplx_anal_qmfbank(
         ptr_sbr_qmf->anal_filter_states + NO_ANALYSIS_CHANNELS;
   }
 
-  return;
+  return 0;
 }
 
-static PLATFORM_INLINE VOID ixheaacd_create_cplx_synt_qmfbank(
+static PLATFORM_INLINE WORD32 ixheaacd_create_cplx_synt_qmfbank(
     ia_sbr_qmf_filter_bank_struct *ptr_sbr_qmf, WORD16 no_bins, WORD16 lsb,
     WORD16 usb, WORD16 chan, FLAG down_sample_flag,
     WORD16 *sbr_qmf_synth_states, WORD32 *sbr_qmf_synth_states_32,
@@ -1071,7 +1074,7 @@ static PLATFORM_INLINE VOID ixheaacd_create_cplx_synt_qmfbank(
     ptr_sbr_qmf->sixty4 = NO_SYNTHESIS_CHANNELS;
   }
 
-  return;
+  return 0;
 }
 
 WORD16 ixheaacd_create_sbrdec(ixheaacd_misc_tables *pstr_common_table,
@@ -1129,9 +1132,13 @@ WORD16 ixheaacd_create_sbrdec(ixheaacd_misc_tables *pstr_common_table,
   ixheaacd_init_sbr_prev_framedata(ptr_sbr_channel->pstr_prev_frame_data,
                                    time_slots);
 
-  ixheaacd_create_hf_generator(&hs->str_hf_generator,
-                               hs->str_codec_qmf_bank.num_time_slots, chan,
-                               sbr_persistent_mem, ps_enable);
+  err = ixheaacd_create_hf_generator(&hs->str_hf_generator,
+                                     hs->str_codec_qmf_bank.num_time_slots,
+                                     chan, sbr_persistent_mem, ps_enable);
+
+  if (err) {
+    return (-1);
+  }
 
   hs->ptr_sbr_overlap_buf = sbr_persistent_mem->ptr_sbr_overlap_buf[chan];
 

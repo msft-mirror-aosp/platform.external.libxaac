@@ -517,9 +517,8 @@ WORD32 ixheaacd_lpd_dec(ia_usac_data_struct *usac_data,
       ixheaacd_interpolation_lsp_params(st->lspold, lsp_curr, lp_flt_coff_a,
                                         num_subfr);
 
-      err = ixheaacd_acelp_alias_cnx(usac_data, pstr_td_frame_data, k,
-                                     lp_flt_coff_a, stability_factor, st);
-      if (err) return err;
+      ixheaacd_acelp_alias_cnx(usac_data, pstr_td_frame_data, k, lp_flt_coff_a,
+                               stability_factor, st);
 
       if ((st->mode_prev != 0) && bpf_control_info) {
         i = (k * num_subfr) + num_subfr_by2;
@@ -546,9 +545,8 @@ WORD32 ixheaacd_lpd_dec(ia_usac_data_struct *usac_data,
       ixheaacd_lpc_coef_gen(st->lspold, lsp_curr, lp_flt_coff_a, n_subfr,
                             ORDER);
 
-      err = ixheaacd_tcx_mdct(usac_data, pstr_td_frame_data, k, lp_flt_coff_a,
-                              subfr_len, st);
-      if (err) return err;
+      ixheaacd_tcx_mdct(usac_data, pstr_td_frame_data, k, lp_flt_coff_a,
+                        subfr_len, st);
       k += (1 << (mode - 1));
     }
 
@@ -610,9 +608,9 @@ WORD32 ixheaacd_lpd_dec(ia_usac_data_struct *usac_data,
   return err;
 }
 
-VOID ixheaacd_lpd_dec_update(ia_usac_lpd_decoder_handle tddec,
-                             ia_usac_data_struct *usac_data, WORD32 i_ch) {
-  WORD32 i, k;
+WORD32 ixheaacd_lpd_dec_update(ia_usac_lpd_decoder_handle tddec,
+                               ia_usac_data_struct *usac_data, WORD32 i_ch) {
+  WORD32 err = 0, i, k;
 
   WORD32 *ptr_overlap = &usac_data->overlap_data_ptr[i_ch][0];
   WORD32 len_fr, lpd_sbf_len, lpd_delay, num_subfr_by2, synth_delay, fac_length;
@@ -651,7 +649,7 @@ VOID ixheaacd_lpd_dec_update(ia_usac_lpd_decoder_handle tddec,
             (1 + (2 * FAC_LENGTH)) * sizeof(FLOAT32));
   }
 
-  return;
+  return err;
 }
 
 WORD32 ixheaacd_lpd_bpf_fix(ia_usac_data_struct *usac_data,

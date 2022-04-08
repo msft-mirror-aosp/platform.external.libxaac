@@ -333,10 +333,10 @@ WORD32 ixheaacd_mps_apply(ia_mps_dec_state_struct* self,
 
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 
-static VOID ixheaacd_mps_pcm_decode(ia_handle_bit_buf_struct it_bit_buff,
-                                    WORD32* out_data_1, WORD32* out_data_2,
-                                    WORD32 ixheaacd_drc_offset, WORD32 num_val,
-                                    WORD32 num_levels) {
+static WORD32 ixheaacd_mps_pcm_decode(ia_handle_bit_buf_struct it_bit_buff,
+                                      WORD32* out_data_1, WORD32* out_data_2,
+                                      WORD32 ixheaacd_drc_offset,
+                                      WORD32 num_val, WORD32 num_levels) {
   WORD32 i = 0, j = 0, idx = 0;
   WORD32 max_grp_len = 0, grp_len = 0, next_val = 0, grp_val = 0;
   UWORD32 data = 0;
@@ -411,12 +411,12 @@ static VOID ixheaacd_mps_pcm_decode(ia_handle_bit_buf_struct it_bit_buff,
     }
   }
 
-  return;
+  return 1;
 }
 
-static VOID ixheaacd_mps_huff_read(ia_handle_bit_buf_struct it_bit_buff,
-                                   const WORD32 (*node_tab)[][2],
-                                   WORD32* out_data) {
+static WORD32 ixheaacd_mps_huff_read(ia_handle_bit_buf_struct it_bit_buff,
+                                     const WORD32 (*node_tab)[][2],
+                                     WORD32* out_data) {
   WORD32 node = 0;
   UWORD32 next_bit = 0;
 
@@ -427,18 +427,18 @@ static VOID ixheaacd_mps_huff_read(ia_handle_bit_buf_struct it_bit_buff,
 
   *out_data = node;
 
-  return;
+  return 1;
 }
 
-static VOID ixheaacd_mps_huff_read_2d(ia_handle_bit_buf_struct it_bit_buff,
-                                      const WORD32 (*node_tab)[][2],
-                                      WORD32 out_data[2], WORD32* escape)
+static WORD32 ixheaacd_mps_huff_read_2d(ia_handle_bit_buf_struct it_bit_buff,
+                                        const WORD32 (*node_tab)[][2],
+                                        WORD32 out_data[2], WORD32* escape)
 
 {
   WORD32 huff_2d_8bit = 0;
   WORD32 node = 0;
 
-  ixheaacd_mps_huff_read(it_bit_buff, node_tab, &node);
+  if (!ixheaacd_mps_huff_read(it_bit_buff, node_tab, &node)) return 0;
   *escape = (node == 0);
 
   if (*escape) {
@@ -450,11 +450,11 @@ static VOID ixheaacd_mps_huff_read_2d(ia_handle_bit_buf_struct it_bit_buff,
     out_data[1] = huff_2d_8bit & 0xf;
   }
 
-  return;
+  return 1;
 }
 
-static VOID ixheaacd_mps_sym_restore(ia_handle_bit_buf_struct it_bit_buff,
-                                     WORD32 lav, WORD32 data[2]) {
+static WORD32 ixheaacd_mps_sym_restore(ia_handle_bit_buf_struct it_bit_buff,
+                                       WORD32 lav, WORD32 data[2]) {
   WORD32 tmp = 0;
   UWORD32 sym_bit = 0;
 
@@ -486,11 +486,11 @@ static VOID ixheaacd_mps_sym_restore(ia_handle_bit_buf_struct it_bit_buff,
     }
   }
 
-  return;
+  return 1;
 }
 
-static VOID ixheaacd_mps_sym_restoreipd(ia_handle_bit_buf_struct it_bit_buff,
-                                        WORD32 lav, WORD32 data[2]) {
+static WORD32 ixheaacd_mps_sym_restoreipd(ia_handle_bit_buf_struct it_bit_buff,
+                                          WORD32 lav, WORD32 data[2]) {
   WORD32 tmp = 0;
   UWORD32 sym_bit = 0;
 
@@ -514,21 +514,21 @@ static VOID ixheaacd_mps_sym_restoreipd(ia_handle_bit_buf_struct it_bit_buff,
     }
   }
 
-  return;
+  return 1;
 }
 
-static VOID ixheaacd_mps_huff_dec_pilot(ia_handle_bit_buf_struct it_bit_buff,
-                                        const WORD32 (*node_tab)[][2],
-                                        WORD32* pilot_data) {
+static WORD32 ixheaacd_mps_huff_dec_pilot(ia_handle_bit_buf_struct it_bit_buff,
+                                          const WORD32 (*node_tab)[][2],
+                                          WORD32* pilot_data) {
   WORD32 node = 0;
 
-  ixheaacd_mps_huff_read(it_bit_buff, node_tab, &node);
+  if (!ixheaacd_mps_huff_read(it_bit_buff, node_tab, &node)) return 0;
   *pilot_data = -(node + 1);
 
-  return;
+  return 1;
 }
 
-static VOID ixheaacd_mps_huff_dec_cld_1d(
+static WORD32 ixheaacd_mps_huff_dec_cld_1d(
     ia_handle_bit_buf_struct it_bit_buff,
     const ia_huff_cld_node_1d_struct* huff_nodes, WORD32* out_data,
     WORD32 num_val, WORD32 p0_flag) {
@@ -537,16 +537,18 @@ static VOID ixheaacd_mps_huff_dec_cld_1d(
   UWORD32 data = 0;
 
   if (p0_flag) {
-    ixheaacd_mps_huff_read(it_bit_buff,
-                           (ia_huff_node_struct)&ixheaacd_huff_part0_nodes.cld,
-                           &node);
+    if (!ixheaacd_mps_huff_read(
+            it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_part0_nodes.cld,
+            &node))
+      return 0;
     out_data[0] = -(node + 1);
     ixheaacd_drc_offset = 1;
   }
 
   for (i = ixheaacd_drc_offset; i < num_val; i++) {
-    ixheaacd_mps_huff_read(it_bit_buff,
-                           (ia_huff_node_struct)&huff_nodes->node_tab, &node);
+    if (!ixheaacd_mps_huff_read(
+            it_bit_buff, (ia_huff_node_struct)&huff_nodes->node_tab, &node))
+      return 0;
     od = -(node + 1);
 
     if (od != 0) {
@@ -559,10 +561,10 @@ static VOID ixheaacd_mps_huff_dec_cld_1d(
     out_data[i] = od;
   }
 
-  return;
+  return 1;
 }
 
-static VOID ixheaacd_mps_huff_dec_ipd_1d(
+static WORD32 ixheaacd_mps_huff_dec_ipd_1d(
     ia_handle_bit_buf_struct it_bit_buff,
     const ia_huff_ipd_node_1d_struct* huff_nodes, WORD32* out_data,
     WORD32 num_val, WORD32 p0_flag) {
@@ -570,24 +572,26 @@ static VOID ixheaacd_mps_huff_dec_ipd_1d(
   WORD32 od = 0;
 
   if (p0_flag) {
-    ixheaacd_mps_huff_read(
-        it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_ipd_nodes.hp0.node_tab,
-        &node);
+    if (!ixheaacd_mps_huff_read(
+            it_bit_buff,
+            (ia_huff_node_struct)&ixheaacd_huff_ipd_nodes.hp0.node_tab, &node))
+      return 0;
     out_data[0] = -(node + 1);
     ixheaacd_drc_offset = 1;
   }
 
   for (i = ixheaacd_drc_offset; i < num_val; i++) {
-    ixheaacd_mps_huff_read(it_bit_buff,
-                           (ia_huff_node_struct)&huff_nodes->node_tab, &node);
+    if (!ixheaacd_mps_huff_read(
+            it_bit_buff, (ia_huff_node_struct)&huff_nodes->node_tab, &node))
+      return 0;
     od = -(node + 1);
     out_data[i] = od;
   }
 
-  return;
+  return 1;
 }
 
-static VOID ixheaacd_mps_huff_dec_icc_1d(
+static WORD32 ixheaacd_mps_huff_dec_icc_1d(
     ia_handle_bit_buf_struct it_bit_buff,
     const ia_huff_icc_node_1d_struct* huff_nodes, WORD32* out_data,
     WORD32 num_val, WORD32 p0_flag) {
@@ -596,16 +600,18 @@ static VOID ixheaacd_mps_huff_dec_icc_1d(
   UWORD32 data = 0;
 
   if (p0_flag) {
-    ixheaacd_mps_huff_read(it_bit_buff,
-                           (ia_huff_node_struct)&ixheaacd_huff_part0_nodes.icc,
-                           &node);
+    if (!ixheaacd_mps_huff_read(
+            it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_part0_nodes.icc,
+            &node))
+      return 0;
     out_data[0] = -(node + 1);
     ixheaacd_drc_offset = 1;
   }
 
   for (i = ixheaacd_drc_offset; i < num_val; i++) {
-    ixheaacd_mps_huff_read(it_bit_buff,
-                           (ia_huff_node_struct)&huff_nodes->node_tab, &node);
+    if (!ixheaacd_mps_huff_read(
+            it_bit_buff, (ia_huff_node_struct)&huff_nodes->node_tab, &node))
+      return 0;
     od = -(node + 1);
 
     if (od != 0) {
@@ -618,10 +624,10 @@ static VOID ixheaacd_mps_huff_dec_icc_1d(
     out_data[i] = od;
   }
 
-  return;
+  return 1;
 }
 
-static VOID ixheaacd_mps_huff_dec_cld_2d(
+static WORD32 ixheaacd_mps_huff_dec_cld_2d(
     ia_handle_bit_buf_struct it_bit_buff,
     const ia_huff_cld_node_2d_struct* huff_nodes, WORD32 out_data[][2],
     WORD32 num_val, WORD32 ch_fac, WORD32* p0_data[2]) {
@@ -632,47 +638,54 @@ static VOID ixheaacd_mps_huff_dec_cld_2d(
   WORD32 esc_data[MAXBANDS][2] = {{0}};
   WORD32 esc_idx[MAXBANDS] = {0};
 
-  ixheaacd_mps_huff_read(
-      it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_lav_idx_nodes.node_tab,
-      &node);
+  if (!ixheaacd_mps_huff_read(
+          it_bit_buff,
+          (ia_huff_node_struct)&ixheaacd_huff_lav_idx_nodes.node_tab, &node))
+    return 0;
   data = -(node + 1);
 
   lav = 2 * data + 3;
 
   if (p0_data[0] != NULL) {
-    ixheaacd_mps_huff_read(it_bit_buff,
-                           (ia_huff_node_struct)&ixheaacd_huff_part0_nodes.cld,
-                           &node);
+    if (!ixheaacd_mps_huff_read(
+            it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_part0_nodes.cld,
+            &node))
+      return 0;
     *p0_data[0] = -(node + 1);
   }
   if (p0_data[1] != NULL) {
-    ixheaacd_mps_huff_read(it_bit_buff,
-                           (ia_huff_node_struct)&ixheaacd_huff_part0_nodes.cld,
-                           &node);
+    if (!ixheaacd_mps_huff_read(
+            it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_part0_nodes.cld,
+            &node))
+      return 0;
     *p0_data[1] = -(node + 1);
   }
 
   for (i = 0; i < num_val; i += ch_fac) {
     switch (lav) {
       case 3:
-        ixheaacd_mps_huff_read_2d(it_bit_buff,
-                                  (ia_huff_node_struct)&huff_nodes->lav3,
-                                  out_data[i], &escape);
+        if (!ixheaacd_mps_huff_read_2d(it_bit_buff,
+                                       (ia_huff_node_struct)&huff_nodes->lav3,
+                                       out_data[i], &escape))
+          return 0;
         break;
       case 5:
-        ixheaacd_mps_huff_read_2d(it_bit_buff,
-                                  (ia_huff_node_struct)&huff_nodes->lav5,
-                                  out_data[i], &escape);
+        if (!ixheaacd_mps_huff_read_2d(it_bit_buff,
+                                       (ia_huff_node_struct)&huff_nodes->lav5,
+                                       out_data[i], &escape))
+          return 0;
         break;
       case 7:
-        ixheaacd_mps_huff_read_2d(it_bit_buff,
-                                  (ia_huff_node_struct)&huff_nodes->lav7,
-                                  out_data[i], &escape);
+        if (!ixheaacd_mps_huff_read_2d(it_bit_buff,
+                                       (ia_huff_node_struct)&huff_nodes->lav7,
+                                       out_data[i], &escape))
+          return 0;
         break;
       case 9:
-        ixheaacd_mps_huff_read_2d(it_bit_buff,
-                                  (ia_huff_node_struct)&huff_nodes->lav9,
-                                  out_data[i], &escape);
+        if (!ixheaacd_mps_huff_read_2d(it_bit_buff,
+                                       (ia_huff_node_struct)&huff_nodes->lav9,
+                                       out_data[i], &escape))
+          return 0;
         break;
       default:
         break;
@@ -681,13 +694,14 @@ static VOID ixheaacd_mps_huff_dec_cld_2d(
     if (escape) {
       esc_idx[esc_contrl++] = i;
     } else {
-      ixheaacd_mps_sym_restore(it_bit_buff, lav, out_data[i]);
+      if (!ixheaacd_mps_sym_restore(it_bit_buff, lav, out_data[i])) return 0;
     }
   }
 
   if (esc_contrl > 0) {
-    ixheaacd_mps_pcm_decode(it_bit_buff, esc_data[0], esc_data[1], 0,
-                            2 * esc_contrl, (2 * lav + 1));
+    if (!ixheaacd_mps_pcm_decode(it_bit_buff, esc_data[0], esc_data[1], 0,
+                                 2 * esc_contrl, (2 * lav + 1)))
+      return 0;
 
     for (i = 0; i < esc_contrl; i++) {
       out_data[esc_idx[i]][0] = esc_data[0][i] - lav;
@@ -695,10 +709,10 @@ static VOID ixheaacd_mps_huff_dec_cld_2d(
     }
   }
 
-  return;
+  return 1;
 }
 
-static VOID ixheaacd_mps_huff_dec_icc_2d(
+static WORD32 ixheaacd_mps_huff_dec_icc_2d(
     ia_handle_bit_buf_struct it_bit_buff,
     const ia_huff_icc_node_2d_struct* huff_nodes, WORD32 out_data[][2],
     WORD32 num_val, WORD32 ch_fac, WORD32* p0_data[2]) {
@@ -709,60 +723,68 @@ static VOID ixheaacd_mps_huff_dec_icc_2d(
   WORD32 esc_data[2][MAXBANDS] = {{0}};
   WORD32 esc_idx[MAXBANDS] = {0};
 
-  ixheaacd_mps_huff_read(
-      it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_lav_idx_nodes.node_tab,
-      &node);
+  if (!ixheaacd_mps_huff_read(
+          it_bit_buff,
+          (ia_huff_node_struct)&ixheaacd_huff_lav_idx_nodes.node_tab, &node))
+    return 0;
   data = -(node + 1);
 
   lav = 2 * data + 1;
 
   if (p0_data[0] != NULL) {
-    ixheaacd_mps_huff_read(it_bit_buff,
-                           (ia_huff_node_struct)&ixheaacd_huff_part0_nodes.icc,
-                           &node);
+    if (!ixheaacd_mps_huff_read(
+            it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_part0_nodes.icc,
+            &node))
+      return 0;
     *p0_data[0] = -(node + 1);
   }
   if (p0_data[1] != NULL) {
-    ixheaacd_mps_huff_read(it_bit_buff,
-                           (ia_huff_node_struct)&ixheaacd_huff_part0_nodes.icc,
-                           &node);
+    if (!ixheaacd_mps_huff_read(
+            it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_part0_nodes.icc,
+            &node))
+      return 0;
     *p0_data[1] = -(node + 1);
   }
 
   for (i = 0; i < num_val; i += ch_fac) {
     switch (lav) {
       case 1:
-        ixheaacd_mps_huff_read_2d(it_bit_buff,
-                                  (ia_huff_node_struct)&huff_nodes->lav1,
-                                  out_data[i], &escape);
+        if (!ixheaacd_mps_huff_read_2d(it_bit_buff,
+                                       (ia_huff_node_struct)&huff_nodes->lav1,
+                                       out_data[i], &escape))
+          return 0;
         break;
       case 3:
-        ixheaacd_mps_huff_read_2d(it_bit_buff,
-                                  (ia_huff_node_struct)&huff_nodes->lav3,
-                                  out_data[i], &escape);
+        if (!ixheaacd_mps_huff_read_2d(it_bit_buff,
+                                       (ia_huff_node_struct)&huff_nodes->lav3,
+                                       out_data[i], &escape))
+          return 0;
         break;
       case 5:
-        ixheaacd_mps_huff_read_2d(it_bit_buff,
-                                  (ia_huff_node_struct)&huff_nodes->lav5,
-                                  out_data[i], &escape);
+        if (!ixheaacd_mps_huff_read_2d(it_bit_buff,
+                                       (ia_huff_node_struct)&huff_nodes->lav5,
+                                       out_data[i], &escape))
+          return 0;
         break;
       case 7:
-        ixheaacd_mps_huff_read_2d(it_bit_buff,
-                                  (ia_huff_node_struct)&huff_nodes->lav7,
-                                  out_data[i], &escape);
+        if (!ixheaacd_mps_huff_read_2d(it_bit_buff,
+                                       (ia_huff_node_struct)&huff_nodes->lav7,
+                                       out_data[i], &escape))
+          return 0;
         break;
     }
 
     if (escape) {
       esc_idx[esc_contrl++] = i;
     } else {
-      ixheaacd_mps_sym_restore(it_bit_buff, lav, out_data[i]);
+      if (!ixheaacd_mps_sym_restore(it_bit_buff, lav, out_data[i])) return 0;
     }
   }
 
   if (esc_contrl > 0) {
-    ixheaacd_mps_pcm_decode(it_bit_buff, esc_data[0], esc_data[1], 0,
-                            2 * esc_contrl, (2 * lav + 1));
+    if (!ixheaacd_mps_pcm_decode(it_bit_buff, esc_data[0], esc_data[1], 0,
+                                 2 * esc_contrl, (2 * lav + 1)))
+      return 0;
 
     for (i = 0; i < esc_contrl; i++) {
       out_data[esc_idx[i]][0] = esc_data[0][i] - lav;
@@ -770,10 +792,10 @@ static VOID ixheaacd_mps_huff_dec_icc_2d(
     }
   }
 
-  return;
+  return 1;
 }
 
-static VOID ixheaacd_mps_huff_dec_ipd_2d(
+static WORD32 ixheaacd_mps_huff_dec_ipd_2d(
     ia_handle_bit_buf_struct it_bit_buff,
     const ia_huff_ipd_node_2d_struct* huff_nodes, WORD32 out_data[][2],
     WORD32 num_val, WORD32 ch_fac, WORD32* p0_data[2]) {
@@ -784,9 +806,10 @@ static VOID ixheaacd_mps_huff_dec_ipd_2d(
   WORD32 esc_data[2][MAXBANDS] = {{0}};
   WORD32 esc_idx[MAXBANDS] = {0};
 
-  ixheaacd_mps_huff_read(
-      it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_lav_idx_nodes.node_tab,
-      &node);
+  if (!ixheaacd_mps_huff_read(
+          it_bit_buff,
+          (ia_huff_node_struct)&ixheaacd_huff_lav_idx_nodes.node_tab, &node))
+    return 0;
 
   data = -(node + 1);
   if (data == 0)
@@ -797,52 +820,59 @@ static VOID ixheaacd_mps_huff_dec_ipd_2d(
   lav = 2 * data + 1;
 
   if (p0_data[0] != NULL) {
-    ixheaacd_mps_huff_read(
-        it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_ipd_nodes.hp0.node_tab,
-        &node);
+    if (!ixheaacd_mps_huff_read(
+            it_bit_buff,
+            (ia_huff_node_struct)&ixheaacd_huff_ipd_nodes.hp0.node_tab, &node))
+      return 0;
     *p0_data[0] = -(node + 1);
   }
   if (p0_data[1] != NULL) {
-    ixheaacd_mps_huff_read(
-        it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_ipd_nodes.hp0.node_tab,
-        &node);
+    if (!ixheaacd_mps_huff_read(
+            it_bit_buff,
+            (ia_huff_node_struct)&ixheaacd_huff_ipd_nodes.hp0.node_tab, &node))
+      return 0;
     *p0_data[1] = -(node + 1);
   }
 
   for (i = 0; i < num_val; i += ch_fac) {
     switch (lav) {
       case 1:
-        ixheaacd_mps_huff_read_2d(it_bit_buff,
-                                  (ia_huff_node_struct)&huff_nodes->lav1,
-                                  out_data[i], &escape);
+        if (!ixheaacd_mps_huff_read_2d(it_bit_buff,
+                                       (ia_huff_node_struct)&huff_nodes->lav1,
+                                       out_data[i], &escape))
+          return 0;
         break;
       case 3:
-        ixheaacd_mps_huff_read_2d(it_bit_buff,
-                                  (ia_huff_node_struct)&huff_nodes->lav3,
-                                  out_data[i], &escape);
+        if (!ixheaacd_mps_huff_read_2d(it_bit_buff,
+                                       (ia_huff_node_struct)&huff_nodes->lav3,
+                                       out_data[i], &escape))
+          return 0;
         break;
       case 5:
-        ixheaacd_mps_huff_read_2d(it_bit_buff,
-                                  (ia_huff_node_struct)&huff_nodes->lav5,
-                                  out_data[i], &escape);
+        if (!ixheaacd_mps_huff_read_2d(it_bit_buff,
+                                       (ia_huff_node_struct)&huff_nodes->lav5,
+                                       out_data[i], &escape))
+          return 0;
         break;
       case 7:
-        ixheaacd_mps_huff_read_2d(it_bit_buff,
-                                  (ia_huff_node_struct)&huff_nodes->lav7,
-                                  out_data[i], &escape);
+        if (!ixheaacd_mps_huff_read_2d(it_bit_buff,
+                                       (ia_huff_node_struct)&huff_nodes->lav7,
+                                       out_data[i], &escape))
+          return 0;
         break;
     }
 
     if (escape) {
       esc_idx[esc_contrl++] = i;
     } else {
-      ixheaacd_mps_sym_restoreipd(it_bit_buff, lav, out_data[i]);
+      if (!ixheaacd_mps_sym_restoreipd(it_bit_buff, lav, out_data[i])) return 0;
     }
   }
 
   if (esc_contrl > 0) {
-    ixheaacd_mps_pcm_decode(it_bit_buff, esc_data[0], esc_data[1], 0,
-                            2 * esc_contrl, (2 * lav + 1));
+    if (!ixheaacd_mps_pcm_decode(it_bit_buff, esc_data[0], esc_data[1], 0,
+                                 2 * esc_contrl, (2 * lav + 1)))
+      return 0;
 
     for (i = 0; i < esc_contrl; i++) {
       out_data[esc_idx[i]][0] = esc_data[0][i] - lav;
@@ -850,7 +880,7 @@ static VOID ixheaacd_mps_huff_dec_ipd_2d(
     }
   }
 
-  return;
+  return 1;
 }
 
 static WORD32 ixheaacd_huff_decode(ia_handle_bit_buf_struct it_bit_buff,
@@ -888,17 +918,21 @@ static WORD32 ixheaacd_huff_decode(ia_handle_bit_buf_struct it_bit_buff,
     switch (data_type) {
       case CLD:
         if (out_data_1 != NULL) {
-          ixheaacd_mps_huff_dec_pilot(
-              it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_pilot_nodes.cld,
-              pilot_data);
+          if (!ixheaacd_mps_huff_dec_pilot(
+                  it_bit_buff,
+                  (ia_huff_node_struct)&ixheaacd_huff_pilot_nodes.cld,
+                  pilot_data))
+            return 0;
         }
         break;
 
       case ICC:
         if (out_data_1 != NULL) {
-          ixheaacd_mps_huff_dec_pilot(
-              it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_pilot_nodes.icc,
-              pilot_data);
+          if (!ixheaacd_mps_huff_dec_pilot(
+                  it_bit_buff,
+                  (ia_huff_node_struct)&ixheaacd_huff_pilot_nodes.icc,
+                  pilot_data))
+            return 0;
         }
         break;
 
@@ -939,42 +973,48 @@ static WORD32 ixheaacd_huff_decode(ia_handle_bit_buf_struct it_bit_buff,
       switch (data_type) {
         case CLD:
           if (out_data_1 != NULL) {
-            ixheaacd_mps_huff_dec_cld_1d(
-                it_bit_buff, &ixheaacd_huff_cld_nodes.h_1_dim[huff_yy_1],
-                out_data_1, num_val_1_int, p0_flag[0]);
+            if (!ixheaacd_mps_huff_dec_cld_1d(
+                    it_bit_buff, &ixheaacd_huff_cld_nodes.h_1_dim[huff_yy_1],
+                    out_data_1, num_val_1_int, p0_flag[0]))
+              return 0;
           }
           if (out_data_2 != NULL) {
-            ixheaacd_mps_huff_dec_cld_1d(
-                it_bit_buff, &ixheaacd_huff_cld_nodes.h_1_dim[huff_yy_2],
-                out_data_2, num_val_2_int, p0_flag[1]);
+            if (!ixheaacd_mps_huff_dec_cld_1d(
+                    it_bit_buff, &ixheaacd_huff_cld_nodes.h_1_dim[huff_yy_2],
+                    out_data_2, num_val_2_int, p0_flag[1]))
+              return 0;
           }
 
           break;
 
         case ICC:
           if (out_data_1 != NULL) {
-            ixheaacd_mps_huff_dec_icc_1d(
-                it_bit_buff, &ixheaacd_huff_icc_nodes.h_1_dim[huff_yy_1],
-                out_data_1, num_val_1_int, p0_flag[0]);
+            if (!ixheaacd_mps_huff_dec_icc_1d(
+                    it_bit_buff, &ixheaacd_huff_icc_nodes.h_1_dim[huff_yy_1],
+                    out_data_1, num_val_1_int, p0_flag[0]))
+              return 0;
           }
           if (out_data_2 != NULL) {
-            ixheaacd_mps_huff_dec_icc_1d(
-                it_bit_buff, &ixheaacd_huff_icc_nodes.h_1_dim[huff_yy_2],
-                out_data_2, num_val_2_int, p0_flag[1]);
+            if (!ixheaacd_mps_huff_dec_icc_1d(
+                    it_bit_buff, &ixheaacd_huff_icc_nodes.h_1_dim[huff_yy_2],
+                    out_data_2, num_val_2_int, p0_flag[1]))
+              return 0;
           }
 
           break;
 
         case IPD:
           if (out_data_1 != NULL) {
-            ixheaacd_mps_huff_dec_ipd_1d(
-                it_bit_buff, &ixheaacd_huff_ipd_nodes.h_1_dim[huff_yy_1],
-                out_data_1, num_val_1_int, p0_flag[0]);
+            if (!ixheaacd_mps_huff_dec_ipd_1d(
+                    it_bit_buff, &ixheaacd_huff_ipd_nodes.h_1_dim[huff_yy_1],
+                    out_data_1, num_val_1_int, p0_flag[0]))
+              return 0;
           }
           if (out_data_2 != NULL) {
-            ixheaacd_mps_huff_dec_ipd_1d(
-                it_bit_buff, &ixheaacd_huff_ipd_nodes.h_1_dim[huff_yy_2],
-                out_data_2, num_val_2_int, p0_flag[1]);
+            if (!ixheaacd_mps_huff_dec_ipd_1d(
+                    it_bit_buff, &ixheaacd_huff_ipd_nodes.h_1_dim[huff_yy_2],
+                    out_data_2, num_val_2_int, p0_flag[1]))
+              return 0;
           }
 
           break;
@@ -1017,75 +1057,93 @@ static WORD32 ixheaacd_huff_decode(ia_handle_bit_buf_struct it_bit_buff,
             case CLD:
 
               if (out_data_1 != NULL) {
-                ixheaacd_mps_huff_dec_cld_2d(
-                    it_bit_buff,
-                    &ixheaacd_huff_cld_nodes.h_2_dim[huff_yy_1][FREQ_PAIR],
-                    pair_vec, num_val_1_int, 2, p0_data_1);
+                if (!ixheaacd_mps_huff_dec_cld_2d(
+                        it_bit_buff,
+                        &ixheaacd_huff_cld_nodes.h_2_dim[huff_yy_1][FREQ_PAIR],
+                        pair_vec, num_val_1_int, 2, p0_data_1))
+                  return 0;
                 if (df_rest_flag_1) {
-                  ixheaacd_mps_huff_dec_cld_1d(
-                      it_bit_buff, &ixheaacd_huff_cld_nodes.h_1_dim[huff_yy_1],
-                      out_data_1_int + num_val_1_int, 1, 0);
+                  if (!ixheaacd_mps_huff_dec_cld_1d(
+                          it_bit_buff,
+                          &ixheaacd_huff_cld_nodes.h_1_dim[huff_yy_1],
+                          out_data_1_int + num_val_1_int, 1, 0))
+                    return 0;
                 }
               }
               if (out_data_2 != NULL) {
-                ixheaacd_mps_huff_dec_cld_2d(
-                    it_bit_buff,
-                    &ixheaacd_huff_cld_nodes.h_2_dim[huff_yy_2][FREQ_PAIR],
-                    pair_vec + 1, num_val_2_int, 2, p0_data_2);
+                if (!ixheaacd_mps_huff_dec_cld_2d(
+                        it_bit_buff,
+                        &ixheaacd_huff_cld_nodes.h_2_dim[huff_yy_2][FREQ_PAIR],
+                        pair_vec + 1, num_val_2_int, 2, p0_data_2))
+                  return 0;
                 if (df_rest_flag_2) {
-                  ixheaacd_mps_huff_dec_cld_1d(
-                      it_bit_buff, &ixheaacd_huff_cld_nodes.h_1_dim[huff_yy_2],
-                      out_data_2_int + num_val_2_int, 1, 0);
+                  if (!ixheaacd_mps_huff_dec_cld_1d(
+                          it_bit_buff,
+                          &ixheaacd_huff_cld_nodes.h_1_dim[huff_yy_2],
+                          out_data_2_int + num_val_2_int, 1, 0))
+                    return 0;
                 }
               }
               break;
 
             case ICC:
               if (out_data_1 != NULL) {
-                ixheaacd_mps_huff_dec_icc_2d(
-                    it_bit_buff,
-                    &ixheaacd_huff_icc_nodes.h_2_dim[huff_yy_1][FREQ_PAIR],
-                    pair_vec, num_val_1_int, 2, p0_data_1);
+                if (!ixheaacd_mps_huff_dec_icc_2d(
+                        it_bit_buff,
+                        &ixheaacd_huff_icc_nodes.h_2_dim[huff_yy_1][FREQ_PAIR],
+                        pair_vec, num_val_1_int, 2, p0_data_1))
+                  return 0;
                 if (df_rest_flag_1) {
-                  ixheaacd_mps_huff_dec_icc_1d(
-                      it_bit_buff, &ixheaacd_huff_icc_nodes.h_1_dim[huff_yy_1],
-                      out_data_1_int + num_val_1_int, 1, 0);
+                  if (!ixheaacd_mps_huff_dec_icc_1d(
+                          it_bit_buff,
+                          &ixheaacd_huff_icc_nodes.h_1_dim[huff_yy_1],
+                          out_data_1_int + num_val_1_int, 1, 0))
+                    return 0;
                 }
               }
               if (out_data_2 != NULL) {
-                ixheaacd_mps_huff_dec_icc_2d(
-                    it_bit_buff,
-                    &ixheaacd_huff_icc_nodes.h_2_dim[huff_yy_2][FREQ_PAIR],
-                    pair_vec + 1, num_val_2_int, 2, p0_data_2);
+                if (!ixheaacd_mps_huff_dec_icc_2d(
+                        it_bit_buff,
+                        &ixheaacd_huff_icc_nodes.h_2_dim[huff_yy_2][FREQ_PAIR],
+                        pair_vec + 1, num_val_2_int, 2, p0_data_2))
+                  return 0;
                 if (df_rest_flag_2) {
-                  ixheaacd_mps_huff_dec_icc_1d(
-                      it_bit_buff, &ixheaacd_huff_icc_nodes.h_1_dim[huff_yy_2],
-                      out_data_2_int + num_val_2_int, 1, 0);
+                  if (!ixheaacd_mps_huff_dec_icc_1d(
+                          it_bit_buff,
+                          &ixheaacd_huff_icc_nodes.h_1_dim[huff_yy_2],
+                          out_data_2_int + num_val_2_int, 1, 0))
+                    return 0;
                 }
               }
               break;
 
             case IPD:
               if (out_data_1 != NULL) {
-                ixheaacd_mps_huff_dec_ipd_2d(
-                    it_bit_buff,
-                    &ixheaacd_huff_ipd_nodes.h_2_dim[huff_yy_1][FREQ_PAIR],
-                    pair_vec, num_val_1_int, 2, p0_data_1);
+                if (!ixheaacd_mps_huff_dec_ipd_2d(
+                        it_bit_buff,
+                        &ixheaacd_huff_ipd_nodes.h_2_dim[huff_yy_1][FREQ_PAIR],
+                        pair_vec, num_val_1_int, 2, p0_data_1))
+                  return 0;
                 if (df_rest_flag_1) {
-                  ixheaacd_mps_huff_dec_ipd_1d(
-                      it_bit_buff, &ixheaacd_huff_ipd_nodes.h_1_dim[huff_yy_1],
-                      out_data_1_int + num_val_1_int, 1, 0);
+                  if (!ixheaacd_mps_huff_dec_ipd_1d(
+                          it_bit_buff,
+                          &ixheaacd_huff_ipd_nodes.h_1_dim[huff_yy_1],
+                          out_data_1_int + num_val_1_int, 1, 0))
+                    return 0;
                 }
               }
               if (out_data_2 != NULL) {
-                ixheaacd_mps_huff_dec_ipd_2d(
-                    it_bit_buff,
-                    &ixheaacd_huff_ipd_nodes.h_2_dim[huff_yy_2][FREQ_PAIR],
-                    pair_vec + 1, num_val_2_int, 2, p0_data_2);
+                if (!ixheaacd_mps_huff_dec_ipd_2d(
+                        it_bit_buff,
+                        &ixheaacd_huff_ipd_nodes.h_2_dim[huff_yy_2][FREQ_PAIR],
+                        pair_vec + 1, num_val_2_int, 2, p0_data_2))
+                  return 0;
                 if (df_rest_flag_2) {
-                  ixheaacd_mps_huff_dec_ipd_1d(
-                      it_bit_buff, &ixheaacd_huff_ipd_nodes.h_1_dim[huff_yy_2],
-                      out_data_2_int + num_val_2_int, 1, 0);
+                  if (!ixheaacd_mps_huff_dec_ipd_1d(
+                          it_bit_buff,
+                          &ixheaacd_huff_ipd_nodes.h_1_dim[huff_yy_2],
+                          out_data_2_int + num_val_2_int, 1, 0))
+                    return 0;
                 }
               }
               break;
@@ -1135,24 +1193,27 @@ static WORD32 ixheaacd_huff_decode(ia_handle_bit_buf_struct it_bit_buff,
 
           switch (data_type) {
             case CLD:
-              ixheaacd_mps_huff_dec_cld_2d(
-                  it_bit_buff,
-                  &ixheaacd_huff_cld_nodes.h_2_dim[huff_yy][TIME_PAIR],
-                  pair_vec, num_val_1_int, 1, p0_data_1);
+              if (!ixheaacd_mps_huff_dec_cld_2d(
+                      it_bit_buff,
+                      &ixheaacd_huff_cld_nodes.h_2_dim[huff_yy][TIME_PAIR],
+                      pair_vec, num_val_1_int, 1, p0_data_1))
+                return 0;
               break;
 
             case ICC:
-              ixheaacd_mps_huff_dec_icc_2d(
-                  it_bit_buff,
-                  &ixheaacd_huff_icc_nodes.h_2_dim[huff_yy][TIME_PAIR],
-                  pair_vec, num_val_1_int, 1, p0_data_1);
+              if (!ixheaacd_mps_huff_dec_icc_2d(
+                      it_bit_buff,
+                      &ixheaacd_huff_icc_nodes.h_2_dim[huff_yy][TIME_PAIR],
+                      pair_vec, num_val_1_int, 1, p0_data_1))
+                return 0;
               break;
 
             case IPD:
-              ixheaacd_mps_huff_dec_ipd_2d(
-                  it_bit_buff,
-                  &ixheaacd_huff_ipd_nodes.h_2_dim[huff_yy][TIME_PAIR],
-                  pair_vec, num_val_1_int, 1, p0_data_1);
+              if (!ixheaacd_mps_huff_dec_ipd_2d(
+                      it_bit_buff,
+                      &ixheaacd_huff_ipd_nodes.h_2_dim[huff_yy][TIME_PAIR],
+                      pair_vec, num_val_1_int, 1, p0_data_1))
+                return 0;
               break;
 
             default:
@@ -1226,10 +1287,10 @@ static VOID ixheaacd_mps_diff_time_dec_fwd(WORD32* prev_data, WORD32* diff_data,
   }
 }
 
-static VOID ixheaacd_attach_lsb(ia_handle_bit_buf_struct it_bit_buff,
-                                WORD32* in_data_msb, WORD32 ixheaacd_drc_offset,
-                                WORD32 num_lsb, WORD32 num_val,
-                                WORD32* out_data) {
+static WORD32 ixheaacd_attach_lsb(ia_handle_bit_buf_struct it_bit_buff,
+                                  WORD32* in_data_msb,
+                                  WORD32 ixheaacd_drc_offset, WORD32 num_lsb,
+                                  WORD32 num_val, WORD32* out_data) {
   WORD32 i = 0, lsb = 0, msb = 0;
   UWORD32 data = 0;
 
@@ -1245,7 +1306,7 @@ static VOID ixheaacd_attach_lsb(ia_handle_bit_buf_struct it_bit_buff,
       out_data[i] = msb - ixheaacd_drc_offset;
   }
 
-  return;
+  return 0;
 }
 
 WORD32 ixheaacd_mps_ecdatapairdec(ia_handle_bit_buf_struct it_bit_buff,
@@ -1318,7 +1379,7 @@ WORD32 ixheaacd_mps_ecdatapairdec(ia_handle_bit_buf_struct it_bit_buff,
 
     default:
       fprintf(stderr, "Unknown type of data!\n");
-      return -1;
+      return 0;
   }
 
   data = ixheaacd_read_bits_buf(it_bit_buff, 1);
@@ -1337,8 +1398,9 @@ WORD32 ixheaacd_mps_ecdatapairdec(ia_handle_bit_buf_struct it_bit_buff,
       pcm_val = data_bands;
     }
 
-    ixheaacd_mps_pcm_decode(it_bit_buff, data_array[0], data_array[1],
-                            quant_offset, pcm_val, quant_levels);
+    if (!ixheaacd_mps_pcm_decode(it_bit_buff, data_array[0], data_array[1],
+                                 quant_offset, pcm_val, quant_levels))
+      return 0;
 
   } else {
     if (pair_flag) {
@@ -1439,18 +1501,19 @@ WORD32 ixheaacd_mps_ecdatapairdec(ia_handle_bit_buf_struct it_bit_buff,
            sizeof(WORD32) * data_bands);
   }
 
-  return IA_NO_ERROR;
+  return 1;
 }
 
-VOID ixheaacd_mps_huff_decode(ia_handle_bit_buf_struct it_bit_buff,
-                              WORD32* out_data, WORD32 num_val) {
+WORD32 ixheaacd_mps_huff_decode(ia_handle_bit_buf_struct it_bit_buff,
+                                WORD32* out_data, WORD32 num_val) {
   WORD32 val_rcvd = 0, dummy = 0, i = 0, val = 0, len = 0;
   WORD32 rl_data[2] = {0};
 
   while (val_rcvd < num_val) {
-    ixheaacd_mps_huff_read_2d(it_bit_buff,
-                              (ia_huff_node_struct)&ixheaacd_huff_reshape_nodes,
-                              rl_data, &dummy);
+    if (!ixheaacd_mps_huff_read_2d(
+            it_bit_buff, (ia_huff_node_struct)&ixheaacd_huff_reshape_nodes,
+            rl_data, &dummy))
+      return 0;
     val = rl_data[0];
     len = rl_data[1] + 1;
     for (i = val_rcvd; i < val_rcvd + len; i++) {
@@ -1459,5 +1522,5 @@ VOID ixheaacd_mps_huff_decode(ia_handle_bit_buf_struct it_bit_buff,
     val_rcvd += len;
   }
 
-  return;
+  return 1;
 }

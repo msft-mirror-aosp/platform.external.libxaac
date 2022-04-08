@@ -37,8 +37,8 @@
 #include "impd_drc_gain_decoder.h"
 #include "impd_drc_rom.h"
 
-VOID impd_shape_filt_block_adapt(const FLOAT32 drc_gain,
-                                 shape_filter_block* shape_filter_block) {
+WORD32 impd_shape_filt_block_adapt(const FLOAT32 drc_gain,
+                                   shape_filter_block* shape_filter_block) {
   //    WORD32 err = 0;
   WORD32 i;
   FLOAT32 warpedGain, x1, y1;
@@ -99,10 +99,10 @@ VOID impd_shape_filt_block_adapt(const FLOAT32 drc_gain,
       shape_filter_block->shape_filter[i].a1 = y1;
     }
   }
-  return;
+  return (0);
 }
 
-VOID resetshape_flter_block(shape_filter_block* shape_filter_block) {
+WORD32 resetshape_flter_block(shape_filter_block* shape_filter_block) {
   WORD32 i, c;
   shape_filter_block->drc_gain_last = -1.0f;
   impd_shape_filt_block_adapt(1.0f, shape_filter_block);
@@ -114,10 +114,10 @@ VOID resetshape_flter_block(shape_filter_block* shape_filter_block) {
       shape_filter_block->shape_filter[i].audio_out_state_2[c] = 0.0f;
     }
   }
-  return;
+  return (0);
 }
 
-VOID impd_shape_filt_block_init(
+WORD32 impd_shape_filt_block_init(
     ia_shape_filter_block_params_struct* shape_flter_block_params,
     shape_filter_block* shape_filter_block) {
   // WORD32 err = 0;
@@ -235,14 +235,13 @@ VOID impd_shape_filt_block_init(
   }
   resetshape_flter_block(shape_filter_block);
   shape_filter_block->shape_flter_block_flag = 1;
-  return;
+  return (0);
 }
 
-VOID impd_shape_filt_block_time_process(shape_filter_block* shape_filter_block,
-                                        FLOAT32* drc_gain, const WORD32 channel,
-                                        FLOAT32* audio_in, WORD32 start,
-                                        WORD32 end) {
-  WORD32 i, j;
+WORD32 impd_shape_filt_block_time_process(
+    shape_filter_block* shape_filter_block, FLOAT32* drc_gain,
+    const WORD32 channel, FLOAT32* audio_in, WORD32 start, WORD32 end) {
+  WORD32 i, j, err = 0;
   FLOAT32 audio_out;
 
   if (shape_filter_block->shape_flter_block_flag) {
@@ -304,5 +303,5 @@ VOID impd_shape_filt_block_time_process(shape_filter_block* shape_filter_block,
     }
   }
 
-  return;
+  return err;
 }
