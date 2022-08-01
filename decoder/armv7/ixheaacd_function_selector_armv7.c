@@ -76,7 +76,7 @@ VOID(*ixheaacd_covariance_matrix_calc_2)
  WORD16) = &ixheaacd_covariance_matrix_calc_2_armv7;
 
 VOID(*ixheaacd_over_lap_add1)
-(WORD32 *, WORD32 *, WORD16 *, const WORD16 *, WORD16, WORD16,
+(WORD32 *, WORD32 *, WORD32 *, const WORD16 *, WORD16, WORD16,
  WORD16) = &ixheaacd_over_lap_add1_armv7;
 
 VOID(*ixheaacd_over_lap_add2)
@@ -161,12 +161,13 @@ VOID(*ixheaacd_post_twiddle)
  WORD npoints) = &ixheaacd_post_twiddle_armv7;
 
 VOID(*ixheaacd_post_twid_overlap_add)
-(WORD16 pcm_out[], WORD32 spec_data[],
+(WORD32 pcm_out[], WORD32 spec_data[],
  ia_aac_dec_imdct_tables_struct *ptr_imdct_tables, WORD npoints,
  WORD32 *ptr_overlap_buf, WORD16 q_shift, const WORD16 *window,
  WORD16 ch_fac) = &ixheaacd_post_twid_overlap_add_armv7;
+
 VOID(*ixheaacd_neg_shift_spec)
-(WORD32 *coef, WORD16 *out, WORD16 q_shift,
+(WORD32 *coef, WORD32 *out, WORD16 q_shift,
  WORD16 ch_fac) = &ixheaacd_neg_shift_spec_armv7;
 
 VOID(*ixheaacd_spec_to_overlapbuf)
@@ -174,11 +175,11 @@ VOID(*ixheaacd_spec_to_overlapbuf)
  WORD32 size) = &ixheaacd_spec_to_overlapbuf_armv7;
 
 VOID(*ixheaacd_overlap_buf_out)
-(WORD16 *out_samples, WORD32 *ptr_overlap_buf, WORD32 size,
+(WORD32 *out_samples, WORD32 *ptr_overlap_buf, WORD32 size,
  const WORD16 ch_fac) = &ixheaacd_overlap_buf_out_armv7;
 
 VOID(*ixheaacd_overlap_out_copy)
-(WORD16 *out_samples, WORD32 *ptr_overlap_buf, WORD32 *ptr_overlap_buf1,
+(WORD32 *out_samples, WORD32 *ptr_overlap_buf, WORD32 *ptr_overlap_buf1,
  const WORD16 ch_fac) = &ixheaacd_overlap_out_copy_armv7;
 
 VOID(*ixheaacd_pretwiddle_compute)
@@ -194,18 +195,6 @@ VOID(*ixheaacd_complex_fft_p2)
 (WORD32 *xr, WORD32 *xi, WORD32 nlength, WORD32 fft_mode,
  WORD32 *preshift) = &ixheaacd_complex_fft_p2_armv7;
 
-VOID(*ixheaacd_mps_complex_fft_64)
-(WORD32 *ptr_x, WORD32 *fin_re, WORD32 *fin_im,
- WORD32 nlength) = &ixheaacd_mps_complex_fft_64_armv7;
-
-VOID(*ixheaacd_mps_synt_pre_twiddle)
-(WORD32 *ptr_in, const WORD32 *table_re, const WORD32 *table_im,
- WORD32 resolution) = &ixheaacd_mps_synt_pre_twiddle_armv7;
-
-VOID(*ixheaacd_mps_synt_post_twiddle)
-(WORD32 *ptr_in, const WORD32 *table_re, const WORD32 *table_im,
- WORD32 resolution) = &ixheaacd_mps_synt_post_twiddle_armv7;
-
 VOID(*ixheaacd_calc_pre_twid)
 (WORD32 *ptr_x, WORD32 *r_ptr, WORD32 *i_ptr, WORD32 nlength,
  const WORD32 *cos_ptr, const WORD32 *sin_ptr) = &ixheaacd_calc_pre_twid_armv7;
@@ -214,14 +203,9 @@ VOID(*ixheaacd_calc_post_twid)
 (WORD32 *ptr_x, WORD32 *r_ptr, WORD32 *i_ptr, WORD32 nlength,
  const WORD32 *cos_ptr, const WORD32 *sin_ptr) = &ixheaacd_calc_post_twid_armv7;
 
-VOID(*ixheaacd_mps_synt_post_fft_twiddle)
-(WORD32 resolution, WORD32 *fin_re, WORD32 *fin_im, const WORD32 *table_re,
- const WORD32 *table_im,
- WORD32 *state) = &ixheaacd_mps_synt_post_fft_twiddle_armv7;
-
 VOID(*ixheaacd_mps_synt_out_calc)
-(WORD32 resolution, WORD32 *out, WORD32 *state,
- const WORD32 *filter_coeff) = &ixheaacd_mps_synt_out_calc_armv7;
+(WORD32 resolution, FLOAT32 *out, FLOAT32 *state,
+ const FLOAT32 *filter_coeff) = &ixheaacd_mps_synt_out_calc_dec;
 
 VOID(*ixheaacd_fft_15_ld)
 (WORD32 *inp, WORD32 *op, WORD32 *fft3out,
