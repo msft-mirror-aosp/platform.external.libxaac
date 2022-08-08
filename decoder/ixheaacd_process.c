@@ -94,7 +94,9 @@
 VOID ixheaacd_allocate_sbr_scr(ia_sbr_scr_struct *sbr_scratch_struct,
                                VOID *base_scratch_ptr, VOID *output_ptr,
                                WORD total_elements, WORD ch_fac,
-                               WORD32 object_type);
+                               WORD32 object_type, WORD32 total_channels,
+                               WORD8 *p_qshift_arr, UWORD8 slot_element,
+                               WORD32 channel);
 
 IA_ERRORCODE ixheaacd_applysbr(
     ia_handle_sbr_dec_inst_struct self,
@@ -117,7 +119,7 @@ IA_ERRORCODE ixheaacd_esbr_process(ia_usac_data_struct *usac_data,
   ia_sbr_scr_struct sbr_scratch_struct;
   ixheaacd_allocate_sbr_scr(&sbr_scratch_struct,
                             usac_data->sbr_scratch_mem_base, NULL, 2, 1,
-                            audio_object_type);
+                            audio_object_type, 0, NULL, 0, 0);
 
   self->usac_independency_flag = usac_data->usac_independency_flg;
 
@@ -380,6 +382,13 @@ WORD32 ixheaacd_usac_process(ia_dec_data_struct *pstr_dec_data,
               &p_state_aac_dec->mps_dec_handle,
               pstr_usac_data->usac_independency_flg, it_bit_buff);
           if (err) return err;
+
+          p_state_aac_dec->mps_dec_handle.band_count[0] =
+              pstr_usac_data->pstr_esbr_dec->pstr_sbr_channel[0]
+                  ->str_sbr_dec.band_count;
+          p_state_aac_dec->mps_dec_handle.band_count[1] =
+              pstr_usac_data->pstr_esbr_dec->pstr_sbr_channel[1]
+                  ->str_sbr_dec.band_count;
 
           for (ch = 0; ch < nr_core_coder_channels; ch++) {
             ptr_inp[2 * ch] =
