@@ -17,6 +17,7 @@
  *****************************************************************************
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
+#include <stdlib.h>
 #include "ixheaacd_sbr_common.h"
 #include "ixheaacd_type_def.h"
 
@@ -1122,6 +1123,10 @@ WORD ixheaacd_huffman_dec_word2(ia_bit_buf_struct *it_bit_buff, WORD32 cb_no,
     } else {
       it_bit_buff->ptr_read_next += (it_bit_buff->bit_pos) >> 3;
       it_bit_buff->bit_pos = it_bit_buff->bit_pos & 0x7;
+      if ((SIZE_T)(it_bit_buff->ptr_read_next) > (SIZE_T)(it_bit_buff->ptr_bit_buf_end + 1))
+      {
+        return IA_ENHAACPLUS_DEC_EXE_NONFATAL_INSUFFICIENT_INPUT_BYTES;
+      }
 
       bits_cons = ((it_bit_buff->ptr_read_next - start_read_pos) << 3) +
                   ((it_bit_buff->bit_pos - start_bit_pos));
@@ -1131,9 +1136,11 @@ WORD ixheaacd_huffman_dec_word2(ia_bit_buf_struct *it_bit_buff, WORD32 cb_no,
   return ret_val;
 }
 
-void ixheaacd_lap1_512_480(WORD32 *coef, WORD32 *prev, WORD16 *out,
+void ixheaacd_lap1_512_480(WORD32 *coef, WORD32 *prev, VOID *out_tmp,
                            const WORD16 *window, WORD16 q_shift, WORD16 size,
-                           WORD16 stride) {
+                           WORD16 stride , WORD slot_element) {
+ 
+  
   WORD32 accu;
   WORD32 i;
   WORD16 rounding_fac = -0x2000;
@@ -1144,6 +1151,8 @@ void ixheaacd_lap1_512_480(WORD32 *coef, WORD32 *prev, WORD16 *out,
 
   WORD32 *pwin1, *pwin2;
   WORD32 *pCoef = &coef[size * 2 - 1 - 0];
+
+  WORD16 * out  = (WORD16*)out_tmp - slot_element;
 
   pwin1 = &window_i[size - 1 - 0];
   pwin2 = &window_i[size + 0];
@@ -1182,12 +1191,12 @@ void ixheaacd_lap1_512_480(WORD32 *coef, WORD32 *prev, WORD16 *out,
   }
 }
 
-VOID ixheaacd_over_lap_add1_dec(WORD32 *coef, WORD32 *prev, WORD16 *out,
+VOID ixheaacd_over_lap_add1_dec(WORD32 *coef, WORD32 *prev, WORD32 *out,
                                 const WORD16 *window, WORD16 q_shift,
                                 WORD16 size, WORD16 ch_fac) {
   WORD32 accu;
   WORD32 i;
-  WORD16 rounding_fac = -0x2000;
+  WORD16 rounding_fac = 0;
 
   for (i = 0; i < size; i++) {
     WORD16 window1, window2;
@@ -1198,16 +1207,14 @@ VOID ixheaacd_over_lap_add1_dec(WORD32 *coef, WORD32 *prev, WORD16 *out,
         ixheaacd_shl32_dir_sat_limit(
             ixheaacd_mult32x16in32(coef[size * 2 - 1 - i], window2), q_shift),
         ixheaacd_mac32x16in32_drc(rounding_fac, prev[i], window1));
-    out[ch_fac * (size - i - 1)] =
-        ixheaacd_shr32(ixheaacd_shl32_dir_sat_limit(accu, 2), 16);
+    out[ch_fac * (size - i - 1)] = accu;
     accu = ixheaacd_sub32_sat(
         ixheaacd_shl32_dir_sat_limit(
             ixheaacd_mult32x16in32(ixheaacd_negate32(coef[size * 2 - 1 - i]),
                                    window1),
             q_shift),
         ixheaacd_mac32x16in32_drc(rounding_fac, prev[i], window2));
-    out[ch_fac * (size + i)] =
-        ixheaacd_shr32(ixheaacd_shl32_dir_sat_limit(accu, 2), 16);
+    out[ch_fac * (size + i)] = accu;
   }
 }
 
