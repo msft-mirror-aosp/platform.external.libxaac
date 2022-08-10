@@ -65,12 +65,14 @@
 #include "ixheaacd_create.h"
 #include "ixheaacd_dec_main.h"
 #include "ixheaacd_error_standards.h"
+#include "ixheaacd_struct_def.h"
 VOID ixheaacd_samples_sat(WORD8 *outbuffer, WORD32 num_samples_out,
                           WORD32 pcmsize, FLOAT32 (*out_samples)[4096],
                           WORD32 *out_bytes, WORD32 num_channel_out) {
   WORD32 num;
   WORD32 i;
-  FLOAT32 sample;
+  WORD32 write_local;
+  FLOAT32 write_local_float;
 
   WORD16 *out_buf = (WORD16 *)outbuffer;
 
@@ -78,29 +80,30 @@ VOID ixheaacd_samples_sat(WORD8 *outbuffer, WORD32 num_samples_out,
 
   if (pcmsize == 16) {
     for (i = 0; i < num; i++) {
-      sample = (out_samples[i % num_channel_out][i / num_channel_out]);
+      write_local_float =
+          (out_samples[i % num_channel_out][i / num_channel_out]);
 
-      if (sample > MAX_16) {
-        sample = MAX_16;
-      } else if (sample < MIN_16) {
-        sample = MIN_16;
+      if (write_local_float > 32767.0f) {
+        write_local_float = 32767.0f;
+      } else if (write_local_float < -32768.0f) {
+        write_local_float = -32768.0f;
       }
-      out_buf[i] = (WORD16)sample;
+      out_buf[i] = (WORD16)write_local_float;
     }
 
     *out_bytes = num * sizeof(WORD16);
   } else {
     WORD8 *out_24bit = (WORD8 *)out_buf;
     for (i = 0; i < num; i++) {
-      WORD32 write_local;
-      sample = (out_samples[i % num_channel_out][i / num_channel_out] * 256);
+      write_local_float =
+          (out_samples[i % num_channel_out][i / num_channel_out] * 256);
 
-      if (sample > MAX_24) {
-        sample = MAX_24;
-      } else if (sample < MIN_24) {
-        sample = MIN_24;
+      if (write_local_float > 8388607.0f) {
+        write_local_float = 8388607.0f;
+      } else if (write_local_float < -8388608.0f) {
+        write_local_float = -8388608.0f;
       }
-      write_local = (WORD32)sample;
+      write_local = (WORD32)write_local_float;
 
       *out_24bit++ = (WORD32)write_local & 0xff;
       *out_24bit++ = ((WORD32)write_local >> 8) & 0xff;
@@ -112,10 +115,9 @@ VOID ixheaacd_samples_sat(WORD8 *outbuffer, WORD32 num_samples_out,
 }
 
 /* audio pre roll frame parsing*/
-static WORD32 ixheaacd_audio_preroll_parsing(ia_dec_data_struct *pstr_dec_data,
-                                             UWORD8 *conf_buf,
-                                             WORD32 *preroll_units,
-                                             WORD32 *preroll_frame_offset) {
+static WORD32 ixheaacd_audio_preroll_parsing(
+    ia_dec_data_struct *pstr_dec_data, UWORD8 *conf_buf, WORD32 *preroll_units,
+    WORD32 *preroll_frame_offset, ia_aac_dec_state_struct *aac_dec_handle) {
   ia_bit_buf_struct *temp_buff =
       (ia_bit_buf_struct *)&(pstr_dec_data->dec_bit_buf);
   WORD32 independency_flag = 0;
@@ -128,7 +130,6 @@ static WORD32 ixheaacd_audio_preroll_parsing(ia_dec_data_struct *pstr_dec_data,
   WORD32 num_pre_roll_frames = 0;
 
   WORD32 frame_idx = 0;
-  WORD32 frame_len[MAX_AUDIO_PREROLLS] = {0};
   WORD32 temp = 0;
 
   WORD32 config_len = 0;
@@ -171,6 +172,16 @@ static WORD32 ixheaacd_audio_preroll_parsing(ia_dec_data_struct *pstr_dec_data,
       for (loop = 0; loop < config_len; loop++)
         conf_buf[loop] = ixheaacd_read_bits_buf(temp_buff, 8);
 
+      if (aac_dec_handle->preroll_config_present == 1) {
+        if (!(memcmp(aac_dec_handle->preroll_config_prev, conf_buf,
+                     sizeof(aac_dec_handle->preroll_config_prev)))) {
+          config_len = 0;
+        }
+      }
+      aac_dec_handle->preroll_config_present = 1;
+      memcpy(aac_dec_handle->preroll_config_prev, conf_buf,
+             sizeof(aac_dec_handle->preroll_config_prev));
+
       apply_crossfade = ixheaacd_read_bits_buf(temp_buff, 1);
       un_used_val = ixheaacd_read_bits_buf(temp_buff, 1);  // reserverd
 
@@ -191,15 +202,20 @@ static WORD32 ixheaacd_audio_preroll_parsing(ia_dec_data_struct *pstr_dec_data,
           WORD32 val_add = ixheaacd_read_bits_buf(temp_buff, 16);
           au_len += val_add;
         }
-        preroll_frame_offset[frame_idx] = temp_buff->size - temp_buff->cnt_bits;
-        frame_len[frame_idx] =
-            (8 * au_len) + (temp_buff->size - temp_buff->cnt_bits);
+        if (config_len != 0) {
+          preroll_frame_offset[frame_idx] =
+              temp_buff->size - temp_buff->cnt_bits;
+        }
         temp_buff->ptr_read_next += au_len;
         temp_buff->cnt_bits -= au_len * 8;
       }
     }
   }
-  *preroll_units = num_pre_roll_frames;
+  if (config_len == 0)
+    *preroll_units = 0;
+  else
+    *preroll_units = num_pre_roll_frames;
+
   return config_len;
 }
 
@@ -218,11 +234,10 @@ WORD32 ixheaacd_dec_main(VOID *temp_handle, WORD8 *inbuffer, WORD8 *outbuffer,
   WORD32 suitable_tracks = 1;
   WORD32 num_samples_out;
   ia_dec_data_struct *pstr_dec_data;
-  UWORD8 config[285];  // max of escapedValue(4, 4, 8) i.e. 2^4 -1 + 2^4 -1 +
-                       // 2^8 -1;
+  UWORD8 config[MAX_PREROLL_SIZE];
   WORD32 config_len;
   WORD32 delay;
-  WORD preroll_frame_offset[4] = {0};
+  WORD preroll_frame_offset[MAX_PREROLL_FRAME_OFFSET] = {0};
   WORD preroll_units = -1;
   WORD32 access_units = 0;
 
@@ -283,9 +298,9 @@ WORD32 ixheaacd_dec_main(VOID *temp_handle, WORD8 *inbuffer, WORD8 *outbuffer,
       if (access_units == 0 &&
           pstr_audio_specific_config->str_usac_config.str_usac_dec_config
               .preroll_flag) {
-        config_len = ixheaacd_audio_preroll_parsing(pstr_dec_data, &config[0],
-                                                    &preroll_units,
-                                                    &preroll_frame_offset[0]);
+        config_len = ixheaacd_audio_preroll_parsing(
+            pstr_dec_data, &config[0], &preroll_units, &preroll_frame_offset[0],
+            aac_dec_handle);
 
         if (config_len == IA_FATAL_ERROR) return IA_FATAL_ERROR;
       }

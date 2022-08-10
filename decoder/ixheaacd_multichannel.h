@@ -29,8 +29,8 @@ IA_ERRORCODE ixheaacd_dec_coupling_channel_element(
     ia_eld_specific_config_struct eld_specific_config, WORD32 ele_type);
 
 void ixheaacd_dec_ind_coupling(
-    ia_exhaacplus_dec_api_struct *p_obj_enhaacplus_dec, WORD16 *coup_ch_output,
-    WORD16 frame_size, WORD total_channels, WORD16 *ptr_time_data);
+    ia_exhaacplus_dec_api_struct *p_obj_enhaacplus_dec, WORD32 *coup_ch_output,
+    WORD16 frame_size, WORD total_channels, VOID *ptr_time_data);
 
 void ixheaacd_dec_downmix_to_stereo(
     ia_exhaacplus_dec_api_struct *p_obj_enhaacplus_dec, WORD16 frame_size,

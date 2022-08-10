@@ -17,26 +17,36 @@
  *****************************************************************************
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
-#ifndef IXHEAACD_MPS_HYBFILTER_H
-#define IXHEAACD_MPS_HYBFILTER_H
+#ifndef IXHEAACD_PEAK_LIMITER_STRUCT_DEF_H
+#define IXHEAACD_PEAK_LIMITER_STRUCT_DEF_H
 
-VOID ixheaacd_mps_qmf_hybrid_analysis_init(ia_mps_hybrid_filt_struct *handle);
+#define MAX_CHANNEL 6
+/*(PEAK_LIM_SIZE = ATTACK_TIME * MAX_SAMPLING_RATE / 1000) + 1*/
+#define PEAK_LIM_SIZE 481
+#define PEAK_LIM_BUFFER_SIZE PEAK_LIM_SIZE *(MAX_CHANNEL + 1)
 
-VOID ixheaacd_mps_qmf_hybrid_analysis(
-    ia_mps_hybrid_filt_struct *handle,
-    ia_cmplx_flt_struct in_qmf[MAX_NUM_QMF_BANDS_MPS_NEW][MAX_TIME_SLOTS],
-    WORD32 num_bands, WORD32 num_samples,
-    ia_cmplx_flt_struct out_hyb[MAX_HYBRID_BANDS_MPS][MAX_TIME_SLOTS]);
+#define DEFAULT_ATTACK_TIME_MS (5.0f)
+#define DEFAULT_RELEASE_TIME_MS (50.0f)
 
-VOID ixheaacd_mps_qmf_hybrid_analysis_no_pre_mix(
-    ia_mps_hybrid_filt_struct *handle,
-    ia_cmplx_flt_struct in_qmf[MAX_NUM_QMF_BANDS_MPS_NEW][MAX_TIME_SLOTS],
-    WORD32 num_bands, WORD32 num_samples,
-    ia_cmplx_flt_struct v[MAX_TIME_SLOTS][MAX_HYBRID_BANDS_MPS]);
+typedef struct ia_peak_limiter_struct {
+  FLOAT32 attack_time;
+  FLOAT32 release_time;
+  FLOAT32 attack_constant;
+  FLOAT32 release_constant;
+  FLOAT32 limit_threshold;
+  UWORD32 num_channels;
+  UWORD32 sample_rate;
+  UWORD32 attack_time_samples;
+  UWORD32 limiter_on;
+  FLOAT32 gain_modified;
+  FLOAT64 pre_smoothed_gain;
+  FLOAT32 *delayed_input;
+  UWORD32 delayed_input_index;
+  FLOAT32 *max_buf;
+  FLOAT32 min_gain;
+  FLOAT32 buffer[PEAK_LIM_BUFFER_SIZE];
+  WORD32 max_idx;
+  WORD32 cir_buf_pnt;
+} ia_peak_limiter_struct;
 
-VOID ixheaacd_mps_qmf_hybrid_synthesis(
-    ia_cmplx_flt_struct in_hyb[MAX_TIME_SLOTS][MAX_HYBRID_BANDS_MPS],
-    WORD32 num_bands, WORD32 num_samples,
-    ia_cmplx_flt_struct in_qmf[MAX_TIME_SLOTS][MAX_NUM_QMF_BANDS_MPS]);
-
-#endif
+#endif /* IXHEAACD_PEAK_LIMITER_STRUCT_DEF_H */
