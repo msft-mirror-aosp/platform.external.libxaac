@@ -21,7 +21,20 @@
 #include <stdlib.h>
 #include "ixheaacd_type_def.h"
 #include "ixheaacd_bitbuffer.h"
+#include "ixheaacd_defines.h"
+#include "ixheaacd_aac_rom.h"
+#include "ixheaacd_pulsedata.h"
+#include "ixheaacd_pns.h"
+#include "ixheaacd_channelinfo.h"
+#include "ixheaacd_common_rom.h"
+#include "ixheaacd_sbrdecsettings.h"
+#include "ixheaacd_sbr_scale.h"
+#include "ixheaacd_env_extr_part.h"
+#include "ixheaacd_sbr_rom.h"
+#include "ixheaacd_hybrid.h"
+#include "ixheaacd_ps_dec.h"
 #include "ixheaacd_config.h"
+#include "ixheaacd_qmf_dec.h"
 #include "ixheaacd_mps_polyphase.h"
 #include "ixheaacd_mps_dec.h"
 #include "ixheaacd_mps_interface.h"
@@ -29,17 +42,20 @@
 #include "ixheaacd_basic_ops32.h"
 #include "ixheaacd_basic_ops40.h"
 
+#define Q28_FLOAT_VAL ((float)(1 << 28))
+#define ONE_BY_Q28_FLOAT_VAL (1.0f / Q28_FLOAT_VAL)
+
 VOID ixheaacd_mps_pre_matrix_mix_matrix_smoothing(
     ia_mps_dec_state_struct *self) {
-  int smooth_band;
+  WORD32 smooth_band;
   FLOAT32 delta, one_minus_delta;
 #ifndef MULT
 #define MULT(a, b) (a * b)
 #endif
-  int ps = 0, pb, row, col;
-  int res_bands = 0;
-  int *p_smoothing_data;
-  self->pre_mix_req = 0;
+  WORD32 ps = 0, pb, row, col;
+  WORD32 res_bands = 0;
+  WORD32 *p_smoothing_data;
+
   if (self->residual_coding) res_bands = self->max_res_bands;
 
   p_smoothing_data = &self->smoothing_data[ps][res_bands];
@@ -126,8 +142,8 @@ VOID ixheaacd_mps_pre_matrix_mix_matrix_smoothing(
 #define TWENTY_FIVE_X_PI_BY_180_Q27 (58563533)
 
 VOID ixheaacd_mps_smoothing_opd(ia_mps_dec_state_struct *self) {
-  int ps, pb;
-  int delta, one_minus_delta;
+  WORD32 ps, pb;
+  WORD32 delta, one_minus_delta;
 
   if (self->opd_smoothing_mode == 0) {
     for (pb = 0; pb < self->bs_param_bands; pb++) {
@@ -144,7 +160,7 @@ VOID ixheaacd_mps_smoothing_opd(ia_mps_dec_state_struct *self) {
     return;
   }
   for (ps = 0; ps < self->num_parameter_sets; ps++) {
-    int thr = self->bs_frame.ipd_data.bs_quant_coarse_xxx[ps]
+    WORD32 thr = self->bs_frame.ipd_data.bs_quant_coarse_xxx[ps]
                   ? FIFTY_X_PI_BY_180_Q27
                   : TWENTY_FIVE_X_PI_BY_180_Q27;
 
@@ -152,9 +168,7 @@ VOID ixheaacd_mps_smoothing_opd(ia_mps_dec_state_struct *self) {
     one_minus_delta = ONE_IN_Q30 - delta;
 
     for (pb = 0; pb < self->bs_param_bands; pb++) {
-      int ltemp, rtemp, tmp;
-#define Q28_FLOAT_VAL ((float)(1 << 28))
-#define ONE_BY_Q28_FLOAT_VAL (1.0 / Q28_FLOAT_VAL)
+      WORD32 ltemp, rtemp, tmp;
       ltemp = ((WORD32)(self->phase_l[ps][pb] * Q28_FLOAT_VAL)) >> 1;
       rtemp = ((WORD32)(self->phase_r[ps][pb] * Q28_FLOAT_VAL)) >> 1;
 
@@ -196,10 +210,7 @@ VOID ixheaacd_mps_smoothing_opd(ia_mps_dec_state_struct *self) {
         self->opd_smooth.smooth_r_phase[pb] -= 2 * PI_IN_Q27;
       while (self->opd_smooth.smooth_r_phase[pb] < 0)
         self->opd_smooth.smooth_r_phase[pb] += 2 * PI_IN_Q27;
-#define Q28_FLOAT_VAL ((float)(1 << 28))
-#ifndef ONE_BY_Q28_FLOAT_VAL
-#define ONE_BY_Q28_FLOAT_VAL (1.0f / Q28_FLOAT_VAL)
-#endif
+
       self->phase_l[ps][pb] =
           (self->opd_smooth.smooth_l_phase[pb] << 1) * ONE_BY_Q28_FLOAT_VAL;
       self->phase_r[ps][pb] =
