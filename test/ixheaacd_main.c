@@ -536,17 +536,6 @@ IA_ERRORCODE ixheaacd_set_config_param(WORD32 argc, pWORD8 argv[],
                               &ui_auto_sbr_upsample);
       _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
     }
-    /* To indicate frame length for a RAW bit-stream. */
-    if (!strncmp((pCHAR8)argv[i], "-flflag:", 8)) {
-        pCHAR8 pb_arg_val = (pCHAR8)(argv[i] + 8);
-        UWORD32 ui_fl_flag = atoi(pb_arg_val);
-        err_code =
-            (*p_ia_process_api)(p_ia_process_api_obj, IA_API_CMD_SET_CONFIG_PARAM,
-                                IA_ENHAACPLUS_DEC_CONFIG_PARAM_FRAMELENGTH_FLAG,
-                                &ui_fl_flag);
-        _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-    }
-
     /* To indicate sample rate for a RAW bit-stream. */
     if (!strncmp((pCHAR8)argv[i], "-fs:", 4)) {
       pCHAR8 pb_arg_val = (pCHAR8)(argv[i] + 4);
@@ -799,8 +788,8 @@ int ixheaacd_main_process(WORD32 argc, pWORD8 argv[]) {
   /* Initialize memory tables                          */
   /* Get memory information and allocate memory        */
 
-  UWORD8 drc_ip_buf[4096 * 4 * 8];
-  UWORD8 drc_op_buf[4096 * 4 * 8];
+  UWORD8 drc_ip_buf[8192 * 4];
+  UWORD8 drc_op_buf[8192 * 4];
 
   /* Memory variables */
   UWORD32 n_mems, ui_rem;
@@ -828,8 +817,6 @@ int ixheaacd_main_process(WORD32 argc, pWORD8 argv[]) {
   WORD32 current_samples = 0;
   WORD32 samples_written = 0;
   WORD32 init_iteration = 1;
-
-  WORD32 fatal_error_chk;
 
 #ifdef ARM_PROFILE_HW
   int frame_count_b = 0;
@@ -922,7 +909,7 @@ int ixheaacd_main_process(WORD32 argc, pWORD8 argv[]) {
   }
 
   /* API object requires 4 bytes (WORD32) alignment */
-  ui_rem = ((SIZE_T)g_pv_arr_alloc_memory[g_w_malloc_count] & 3);
+  ui_rem = ((WORD32)g_pv_arr_alloc_memory[g_w_malloc_count] & 3);
   /* Set API object with the memory allocated */
   pv_ia_process_api_obj =
       (pVOID)((WORD8 *)g_pv_arr_alloc_memory[g_w_malloc_count] + 4 - ui_rem);
@@ -1004,7 +991,7 @@ int ixheaacd_main_process(WORD32 argc, pWORD8 argv[]) {
                        IA_TESTBENCH_MFMAN_FATAL_MEM_ALLOC_FAILED);
     }
 
-    ui_rem = ((SIZE_T)g_pv_arr_alloc_memory[g_w_malloc_count] % ui_alignment);
+    ui_rem = ((WORD32)g_pv_arr_alloc_memory[g_w_malloc_count] % ui_alignment);
     pv_alloc_ptr = (pVOID)((WORD8 *)g_pv_arr_alloc_memory[g_w_malloc_count] +
                            ui_alignment - ui_rem);
 
@@ -1048,7 +1035,7 @@ int ixheaacd_main_process(WORD32 argc, pWORD8 argv[]) {
   }
 
   /* API object requires 4 bytes (WORD32) alignment */
-  ui_rem = ((SIZE_T)g_pv_arr_alloc_memory[g_w_malloc_count] & 3);
+  ui_rem = ((WORD32)g_pv_arr_alloc_memory[g_w_malloc_count] & 3);
 
   /* Set pointer for process memory tables    */
   err_code = (*p_ia_process_api)(
@@ -1117,7 +1104,7 @@ int ixheaacd_main_process(WORD32 argc, pWORD8 argv[]) {
                        (pWORD8) "Mem tables alloc", err_code);
     }
 
-    ui_rem = ((SIZE_T)g_pv_arr_alloc_memory[g_w_malloc_count] % ui_alignment);
+    ui_rem = ((WORD32)g_pv_arr_alloc_memory[g_w_malloc_count] % ui_alignment);
     pv_alloc_ptr = (pVOID)((WORD8 *)g_pv_arr_alloc_memory[g_w_malloc_count] +
                            ui_alignment - ui_rem);
 
@@ -1285,27 +1272,6 @@ int ixheaacd_main_process(WORD32 argc, pWORD8 argv[]) {
   } while (!ui_init_done);
 
   if (mpeg_d_drc_on == 1) {
-    err_code = (*p_ia_process_api)(
-        pv_ia_process_api_obj, IA_API_CMD_GET_CONFIG_PARAM,
-        IA_ENHAACPLUS_DEC_CONFIG_PARAM_SBR_MODE, &i_sbr_mode);
-    _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-    if (i_sbr_mode != 0) {
-      WORD32 frame_length;
-      if (i_sbr_mode == 1) {
-        frame_length = 2048;
-      } else if (i_sbr_mode == 3) {
-        frame_length = 4096;
-      } else {
-        frame_length = 1024;
-      }
-
-      err_code =
-          ia_drc_dec_api(pv_ia_drc_process_api_obj, IA_API_CMD_SET_CONFIG_PARAM,
-                         IA_DRC_DEC_CONFIG_PARAM_FRAME_SIZE, &frame_length);
-      _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-    }
-
     err_code =
         (*p_get_config_param)(pv_ia_process_api_obj, &i_samp_freq, &i_num_chan,
                               &i_pcm_wd_sz, &i_channel_mask);
@@ -1693,8 +1659,6 @@ int ixheaacd_main_process(WORD32 argc, pWORD8 argv[]) {
 
     _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
 
-    fatal_error_chk = err_code & IA_FATAL_ERROR;
-
     /* Checking for end of processing */
     err_code = (*p_ia_process_api)(pv_ia_process_api_obj, IA_API_CMD_EXECUTE,
                                    IA_CMD_TYPE_DONE_QUERY, &ui_exec_done);
@@ -1774,7 +1738,8 @@ int ixheaacd_main_process(WORD32 argc, pWORD8 argv[]) {
         i_total_bytes += i_out_bytes;
 
         if (mpegd_drc_present == 1) {
-          WORD32 is_config_changed = 0, apply_crossfade = 0;
+          memcpy(drc_ip_buf, pb_out_buf + preroll_frame_offset, i_out_bytes);
+          preroll_frame_offset += i_out_bytes;
 
           err_code = (*p_ia_process_api)(
               pv_ia_process_api_obj, IA_API_CMD_GET_CONFIG_PARAM,
@@ -1802,124 +1767,6 @@ int ixheaacd_main_process(WORD32 argc, pWORD8 argv[]) {
                              IA_API_CMD_SET_INPUT_BYTES, 0, &i_out_bytes);
 
           _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-          err_code = (*p_ia_process_api)(
-              pv_ia_process_api_obj, IA_API_CMD_GET_CONFIG_PARAM,
-              IA_ENHAACPLUS_DEC_DRC_IS_CONFIG_CHANGED, &is_config_changed);
-
-          _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-          err_code = ia_drc_dec_api(
-              pv_ia_drc_process_api_obj, IA_API_CMD_SET_CONFIG_PARAM,
-              IA_DRC_DEC_CONFIG_PARAM_CONFIG_CHANGED, &is_config_changed);
-          _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-          err_code = (*p_ia_process_api)(
-              pv_ia_process_api_obj, IA_API_CMD_GET_CONFIG_PARAM,
-              IA_ENHAACPLUS_DEC_DRC_APPLY_CROSSFADE, &apply_crossfade);
-
-          _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-          err_code = ia_drc_dec_api(
-              pv_ia_drc_process_api_obj, IA_API_CMD_SET_CONFIG_PARAM,
-              IA_DRC_DEC_CONFIG_PARAM_APPLY_CROSSFADE, &apply_crossfade);
-          _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-          if (is_config_changed == 1) {
-            VOID *p_array[2][16];
-            WORD32 ii;
-            WORD32 num_elements;
-            WORD32 num_config_ext;
-            WORD32 buf_sizes[2][16];
-            WORD32 bit_str_fmt = 1;
-
-            memset(buf_sizes, 0, 32 * sizeof(WORD32));
-
-            err_code = (*p_ia_process_api)(
-                pv_ia_process_api_obj, IA_API_CMD_GET_CONFIG_PARAM,
-                IA_ENHAACPLUS_DEC_CONFIG_EXT_ELE_BUF_SIZES, &buf_sizes[0][0]);
-            _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-            err_code = (*p_ia_process_api)(
-                pv_ia_process_api_obj, IA_API_CMD_GET_CONFIG_PARAM,
-                IA_ENHAACPLUS_DEC_CONFIG_EXT_ELE_PTR, &p_array);
-            _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-            err_code =
-                ia_drc_dec_api(pv_ia_drc_process_api_obj, IA_API_CMD_INIT,
-                               IA_CMD_TYPE_INIT_SET_BUFF_PTR, 0);
-
-            _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-            err_code = (*p_ia_process_api)(
-                pv_ia_process_api_obj, IA_API_CMD_GET_CONFIG_PARAM,
-                IA_ENHAACPLUS_DEC_CONFIG_NUM_ELE, &num_elements);
-            _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-            err_code = (*p_ia_process_api)(
-                pv_ia_process_api_obj, IA_API_CMD_GET_CONFIG_PARAM,
-                IA_ENHAACPLUS_DEC_CONFIG_NUM_CONFIG_EXT, &num_config_ext);
-            _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-            for (ii = 0; ii < num_config_ext; ii++) {
-              /*copy loudness bitstream*/
-              if (buf_sizes[0][ii] > 0) {
-                memcpy(drc_ip_buf, p_array[0][ii], buf_sizes[0][ii]);
-
-                /*Set bitstream_split_format */
-                err_code = ia_drc_dec_api(
-                    pv_ia_drc_process_api_obj, IA_API_CMD_SET_CONFIG_PARAM,
-                    IA_DRC_DEC_CONFIG_PARAM_BITS_FORMAT, &bit_str_fmt);
-
-                /* Set number of bytes to be processed */
-                err_code = ia_drc_dec_api(pv_ia_drc_process_api_obj,
-                                          IA_API_CMD_SET_INPUT_BYTES_IL_BS, 0,
-                                          &buf_sizes[0][ii]);
-
-                _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-                /* Execute process */
-                err_code =
-                    ia_drc_dec_api(pv_ia_drc_process_api_obj, IA_API_CMD_INIT,
-                                   IA_CMD_TYPE_INIT_CPY_IL_BSF_BUFF, NULL);
-
-                _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-                drc_flag = 1;
-              }
-            }
-
-            for (ii = 0; ii < num_elements; ii++) {
-              /*copy config bitstream*/
-              if (buf_sizes[1][ii] > 0) {
-                memcpy(drc_ip_buf, p_array[1][ii], buf_sizes[1][ii]);
-
-                /*Set bitstream_split_format */
-                err_code = ia_drc_dec_api(
-                    pv_ia_drc_process_api_obj, IA_API_CMD_SET_CONFIG_PARAM,
-                    IA_DRC_DEC_CONFIG_PARAM_BITS_FORMAT, &bit_str_fmt);
-
-                /* Set number of bytes to be processed */
-                err_code = ia_drc_dec_api(pv_ia_drc_process_api_obj,
-                                          IA_API_CMD_SET_INPUT_BYTES_IC_BS, 0,
-                                          &buf_sizes[1][ii]);
-
-                _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-                /* Execute process */
-                err_code =
-                    ia_drc_dec_api(pv_ia_drc_process_api_obj, IA_API_CMD_INIT,
-                                   IA_CMD_TYPE_INIT_CPY_IC_BSF_BUFF, NULL);
-
-                _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
-
-                drc_flag = 1;
-              }
-            }
-          }
-
-          memcpy(drc_ip_buf, pb_out_buf + preroll_frame_offset, i_out_bytes);
-          preroll_frame_offset += i_out_bytes;
 
           err_code =
               ia_drc_dec_api(pv_ia_drc_process_api_obj, IA_API_CMD_EXECUTE,
@@ -2024,7 +1871,7 @@ int ixheaacd_main_process(WORD32 argc, pWORD8 argv[]) {
 #endif
 
     /* Do till the process execution is done */
-  } while (!ui_exec_done && !fatal_error_chk);
+  } while (!ui_exec_done);
 
 #ifdef ARM_PROFILE_HW
   fprintf(stdout, "\n Peak MCPS = %f\n", Peak_b);
@@ -2092,7 +1939,6 @@ void print_usage() {
   printf("\n[-sbrup:<auto_sbr_upsample>]");
 
   printf("\n[-maxchannel:<maximum_num_channels>]");
-  printf("\n[-flflag:<framelength_flag>}");
 #ifdef MULTICHANNEL_ENABLE
   printf("\n[-coupchannel:<coupling_channel>]");
   printf("\n[-downmix:<down_mix_stereo>]");
@@ -2123,14 +1969,8 @@ void print_usage() {
   printf(
       "\n    in case of stream changing from SBR present to SBR not present. "
       "Default 1");
-
   printf("\n  <maximum_num_channels> is the number of maxiumum ");
   printf("\n    channels the input may have. Default is 6 (5.1)");
-
-  printf("\n  <framelength_flag> is flag for Decoding framelength of 1024 or 960.");
-  printf("\n    1 to decode 960 frame length, 0 to decode 1024 frame length");
-  printf("\n    Frame length value in the GA header will override this option.");
-  printf("\n    Default 0  ");
 
 #ifdef MULTICHANNEL_ENABLE
   printf("\n  <coupling_channel> is element instance tag of ");
@@ -2163,7 +2003,6 @@ void print_usage() {
 /*                                                                             */
 /*        DD MM YYYY       Author                Changes */
 /*        04 09 2005       Ittiam                Created */
-/*                                                                             */
 /*                                                                             */
 /*******************************************************************************/
 

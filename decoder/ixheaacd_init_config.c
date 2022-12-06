@@ -29,7 +29,6 @@
 #include "ixheaacd_defines.h"
 #include "ixheaacd_memory_standards.h"
 #include "ixheaacd_sbrdecsettings.h"
-#include "ixheaacd_sbr_scale.h"
 #include "ixheaacd_env_extr_part.h"
 #include "ixheaacd_aac_rom.h"
 #include "ixheaacd_common_rom.h"
@@ -52,9 +51,6 @@
 #include "ixheaacd_aacdec.h"
 #include "ixheaacd_sbr_common.h"
 
-#include "ixheaacd_hybrid.h"
-#include "ixheaacd_ps_dec.h"
-#include "ixheaacd_qmf_dec.h"
 #include "ixheaacd_mps_polyphase.h"
 #include "ixheaacd_config.h"
 #include "ixheaacd_mps_dec.h"
@@ -334,7 +330,7 @@ IA_ERRORCODE ixheaacd_mps212_config(
     pstr_usac_mps212_config->bs_residual_bands =
         ixheaacd_read_bits_buf(it_bit_buff, 5);
 
-    if (pstr_usac_mps212_config->bs_residual_bands > MAX_PARAMETER_BANDS_MPS)
+    if (pstr_usac_mps212_config->bs_residual_bands > MAX_PARAMETER_BANDS)
       return IA_FATAL_ERROR;
 
     pstr_usac_mps212_config->bs_ott_bands_phase =
@@ -474,6 +470,7 @@ WORD32 ixheaacd_config_extension(
          USAC_MAX_CONFIG_EXTENSIONS * sizeof(WORD32));
 
   for (j = 0; j < num_config_extensions; j++) {
+    UWORD32 tmp;
     UWORD32 fill_byte_val = 0xa5;
 
     ixheaacd_read_escape_value(it_bit_buff, &(usac_config_ext_type), 4, 8, 16);
@@ -502,7 +499,7 @@ WORD32 ixheaacd_config_extension(
           pstr_usac_decoder_config->usac_cfg_ext_info_present[j] = 1;
         } else {
           for (i = 0; i < usac_config_ext_len; i++)
-            ixheaacd_read_bits_buf(it_bit_buff, 8);
+            tmp = ixheaacd_read_bits_buf(it_bit_buff, 8);
         }
         break;
     }

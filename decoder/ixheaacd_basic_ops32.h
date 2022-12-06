@@ -131,22 +131,12 @@ static PLATFORM_INLINE WORD32 ixheaacd_mult16x16in32(WORD16 a, WORD16 b) {
   return product;
 }
 
-static PLATFORM_INLINE WORD32 ixheaacd_mult32x16in32_sat(WORD32 a, WORD16 b) {
-  WORD32 result;
-  WORD64 temp_result;
+static PLATFORM_INLINE WORD32 mult16x16in32_32(WORD32 a, WORD32 b) {
+  WORD32 product;
 
-  temp_result = (WORD64)a * (WORD64)b;
+  product = (WORD32)a * (WORD32)b;
 
-  if (temp_result < (WORD64)MIN_32)
-    result = MIN_32;
-
-  else if (temp_result > (WORD64)MAX_32)
-    result = MAX_32;
-
-  else
-    result = (WORD32)(temp_result);
-
-  return(result);
+  return product;
 }
 
 static PLATFORM_INLINE WORD32 ixheaacd_mult16x16in32_shl(WORD16 a, WORD16 b) {

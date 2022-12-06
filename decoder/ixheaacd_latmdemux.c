@@ -71,7 +71,6 @@
 
 #include "ixheaacd_aacdec.h"
 #include "ixheaacd_config.h"
-#include "ixheaacd_qmf_dec.h"
 #include "ixheaacd_mps_polyphase.h"
 #include "ixheaacd_mps_dec.h"
 #include "ixheaacd_struct_def.h"
@@ -145,8 +144,8 @@ static UWORD32 ixheaacd_latm_get_value(ia_bit_buf_struct *it_bit_buff) {
   if (bytes_read <= 3)
     return ixheaacd_read_bits_buf(it_bit_buff, 8 * bytes_read);
   else
-    return ixheaacd_add32_sat(ixheaacd_shl32_sat(ixheaacd_read_bits_buf(it_bit_buff, 24), 8),
-                              ixheaacd_read_bits_buf(it_bit_buff, 8));
+    return (ixheaacd_read_bits_buf(it_bit_buff, 24) << 8) +
+           ixheaacd_read_bits_buf(it_bit_buff, 8);
 }
 
 IA_ERRORCODE ixheaacd_latm_stream_mux_config(
@@ -157,6 +156,7 @@ IA_ERRORCODE ixheaacd_latm_stream_mux_config(
   UWORD32 lay;
   WORD32 bytes_consumed;
   WORD32 audio_mux_version_a;
+  UWORD32 tara_buf_fullness;
   IA_ERRORCODE error_code = AAC_DEC_OK;
   ixheaacd_latm_layer_info *layer_info = 0;
 
@@ -169,7 +169,7 @@ IA_ERRORCODE ixheaacd_latm_stream_mux_config(
 
   if (audio_mux_version_a == 0) {
     if (latm_element->audio_mux_version == 1) {
-      ixheaacd_latm_get_value(it_bit_buff);/*tara_buf_fullness*/
+      tara_buf_fullness = ixheaacd_latm_get_value(it_bit_buff);
     }
     latm_element->all_streams_same_time_framing =
         ixheaacd_read_bits_buf(it_bit_buff, 1);

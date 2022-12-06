@@ -215,6 +215,7 @@ VOID ixheaacd_tns_ar_filter_fixed_dec(WORD32 *spectrum, WORD32 size, WORD32 inc,
     order = ((order & 0xfffffffc) + 4);
   }
   {
+    WORD32 temp_lo = 0;
     for (i = 0; i < order; i++) {
       y = ixheaacd_shl32_sat((*spectrum), scale_spec);
       acc = 0;
@@ -229,6 +230,7 @@ VOID ixheaacd_tns_ar_filter_fixed_dec(WORD32 *spectrum, WORD32 size, WORD32 inc,
       *spectrum = y >> scale_spec;
       spectrum += inc;
     }
+    temp_lo = 0;
     for (i = order; i < size; i++) {
       y = ixheaacd_shl32_sat((*spectrum), scale_spec);
       acc = 0;
@@ -262,6 +264,7 @@ VOID ixheaacd_tns_ar_filter_fixed_non_neon_armv7(WORD32 *spectrum, WORD32 size,
     order = ((order & 0xfffffffc) + 4);
   }
   {
+    WORD32 temp_lo = 0;
     for (i = 0; i < order; i++) {
       y = ixheaacd_shl32_sat((*spectrum), scale_spec);
       acc = 0;
@@ -276,6 +279,7 @@ VOID ixheaacd_tns_ar_filter_fixed_non_neon_armv7(WORD32 *spectrum, WORD32 size,
       *spectrum = y >> scale_spec;
       spectrum += inc;
     }
+    temp_lo = 0;
     for (i = order; i < size; i++) {
       WORD64 acc = 0;
       WORD32 acc1;
@@ -310,6 +314,7 @@ VOID ixheaacd_tns_ar_filter_fixed_armv8(WORD32 *spectrum, WORD32 size,
     order = ((order & 0xfffffffc) + 4);
   }
   {
+    WORD32 temp_lo = 0;
     for (i = 0; i < order; i++) {
       y = ixheaacd_shl32_sat((*spectrum), scale_spec);
       acc = 0;
@@ -324,6 +329,7 @@ VOID ixheaacd_tns_ar_filter_fixed_armv8(WORD32 *spectrum, WORD32 size,
       *spectrum = y >> scale_spec;
       spectrum += inc;
     }
+    temp_lo = 0;
     for (i = order; i < size; i++) {
       WORD64 acc = 0;
       WORD32 acc1;

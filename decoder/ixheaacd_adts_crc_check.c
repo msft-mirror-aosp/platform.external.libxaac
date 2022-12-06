@@ -24,7 +24,6 @@
 #include "ixheaacd_aac_rom.h"
 
 #include "ixheaacd_sbrdecsettings.h"
-#include "ixheaacd_sbr_scale.h"
 #include "ixheaacd_env_extr_part.h"
 #include "ixheaacd_sbr_rom.h"
 
@@ -49,12 +48,8 @@
 #include "ixheaacd_latmdemux.h"
 #include "ixheaacd_aacdec.h"
 
-#include "ixheaacd_hybrid.h"
-#include "ixheaacd_ps_dec.h"
-
 #include "ixheaacd_mps_polyphase.h"
 #include "ixheaacd_config.h"
-#include "ixheaacd_qmf_dec.h"
 #include "ixheaacd_mps_dec.h"
 
 #include "ixheaacd_struct_def.h"

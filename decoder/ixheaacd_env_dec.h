@@ -20,14 +20,13 @@
 #ifndef IXHEAACD_ENV_DEC_H
 #define IXHEAACD_ENV_DEC_H
 
-IA_ERRORCODE ixheaacd_dec_sbrdata(
-    ia_sbr_header_data_struct *ptr_header_data_ch_0,
-    ia_sbr_header_data_struct *ptr_header_data_ch_1,
-    ia_sbr_frame_info_data_struct *ptr_sbr_data_ch_0,
-    ia_sbr_prev_frame_data_struct *ptr_prev_data_ch_0,
-    ia_sbr_frame_info_data_struct *ptr_sbr_data_ch_1,
-    ia_sbr_prev_frame_data_struct *ptr_prev_data_ch_1,
-    ixheaacd_misc_tables *ptr_common_tables, WORD32 ldmps_present);
+WORD32 ixheaacd_dec_sbrdata(ia_sbr_header_data_struct *ptr_header_data_ch_0,
+                            ia_sbr_header_data_struct *ptr_header_data_ch_1,
+                            ia_sbr_frame_info_data_struct *ptr_sbr_data_ch_0,
+                            ia_sbr_prev_frame_data_struct *ptr_prev_data_ch_0,
+                            ia_sbr_frame_info_data_struct *ptr_sbr_data_ch_1,
+                            ia_sbr_prev_frame_data_struct *ptr_prev_data_ch_1,
+                            ixheaacd_misc_tables *ptr_common_tables);
 
 IA_ERRORCODE ixheaacd_dec_sbrdata_for_pvc(
     ia_sbr_header_data_struct *ptr_header_data,
@@ -57,12 +56,11 @@ VOID ixheaacd_harm_idx_onethree(FLAG noise_absc_flag, WORD16 num_subband,
                                 WORD16 *ptr_sine_level_buf, WORD16 noise_e,
                                 WORD freq_inv_flag, WORD32 harm_index);
 
-IA_ERRORCODE ixheaacd_dec_envelope(
-    ia_sbr_header_data_struct *ptr_header_data,
-    ia_sbr_frame_info_data_struct *ptr_sbr_data,
-    ia_sbr_prev_frame_data_struct *ptr_prev_data,
-    ia_sbr_prev_frame_data_struct *ptr_prev_data_ch_1,
-    ixheaacd_misc_tables *pstr_common_tables);
+WORD32 ixheaacd_dec_envelope(ia_sbr_header_data_struct *ptr_header_data,
+                             ia_sbr_frame_info_data_struct *ptr_sbr_data,
+                             ia_sbr_prev_frame_data_struct *ptr_prev_data,
+                             ia_sbr_prev_frame_data_struct *ptr_prev_data_ch_1,
+                             ixheaacd_misc_tables *pstr_common_tables);
 
 VOID ixheaacd_lean_sbrconcealment(ia_sbr_header_data_struct *ptr_header_data,
                                   ia_sbr_frame_info_data_struct *ptr_sbr_data,
