@@ -68,6 +68,9 @@
 #include "ixheaacd_latmdemux.h"
 #include "ixheaacd_aacdec.h"
 #include "ixheaacd_config.h"
+#include "ixheaacd_hybrid.h"
+#include "ixheaacd_ps_dec.h"
+#include "ixheaacd_qmf_dec.h"
 #include "ixheaacd_mps_polyphase.h"
 #include "ixheaacd_mps_dec.h"
 #include "ixheaacd_struct_def.h"
@@ -142,8 +145,6 @@ IA_ERRORCODE ixheaacd_dec_coupling_channel_element(
   WORD ind_sw_cce_flag, num_coupled_elements;
 
   WORD num_gain_element_lists = 0;
-  WORD cc_domain;
-  WORD gain_element_sign;
   WORD gain_element_scale;
 
   const UWORD16 *hcod_sf =
@@ -182,8 +183,8 @@ IA_ERRORCODE ixheaacd_dec_coupling_channel_element(
   if ((ind_sw_cce_flag == 0) && (num_gain_element_lists > MAX_BS_ELEMENT)) {
     return IA_FATAL_ERROR;
   }
-  cc_domain = ixheaacd_read_bits_buf(bs, 1);
-  gain_element_sign = ixheaacd_read_bits_buf(bs, 1);
+  ixheaacd_read_bits_buf(bs, 1);/*cc_domain*/
+  ixheaacd_read_bits_buf(bs, 1);/*gain_element_sign*/
   gain_element_scale = ixheaacd_read_bits_buf(bs, 2);
 
   aac_handle->pstr_aac_dec_ch_info[0]->str_ics_info.num_swb_window = 0;
@@ -255,38 +256,36 @@ IA_ERRORCODE ixheaacd_dec_coupling_channel_element(
   return error_status;
 }
 
-void ixheaacd_dec_couple_channel(WORD16 *p_time_data, WORD16 *out_samp_cc,
+void ixheaacd_dec_couple_channel(WORD32 *p_time_data, WORD32 *out_samp_cc,
                                  WORD16 frame_size, WORD total_channels,
-                                 WORD32 gain_cc)
+                                 WORD16 gain_cc)
 
 {
   WORD i;
-  WORD16 out_cc;
-  WORD16 *ptr_out_samp = &out_samp_cc[0];
+  WORD32 out_cc;
+  WORD32 *ptr_out_samp = &out_samp_cc[0];
   for (i = frame_size - 1; i >= 0; i--) {
-    out_cc = ixheaacd_round16(ixheaacd_shl32_sat(
-        ixheaacd_mult32x16in32(gain_cc, *ptr_out_samp++), 3));
-    *p_time_data = ixheaacd_add16_sat(out_cc, *p_time_data);
+    out_cc = (ixheaacd_shl32_sat(
+        ixheaacd_mult32x16in32(*ptr_out_samp++, gain_cc), 3));
+    *p_time_data = ixheaacd_add32_sat(out_cc, *p_time_data);
     p_time_data += total_channels;
   }
 }
 
 void ixheaacd_dec_ind_coupling(
-    ia_exhaacplus_dec_api_struct *p_obj_exhaacplus_dec, WORD16 *coup_ch_output,
-    WORD16 frame_size, WORD total_channels, WORD16 *ptr_time_data)
+    ia_exhaacplus_dec_api_struct *p_obj_exhaacplus_dec, WORD32 *coup_ch_output,
+    WORD16 frame_size, WORD total_channels, VOID *ptr_time_data_tmp)
 
 {
   WORD c, j, k;
   WORD l;
-  WORD coupling_channel;
-
-  WORD16 *out_samp_cc;
+  WORD32 *out_samp_cc;
 
   ia_enhaacplus_dec_ind_cc *ind_channel_info;
 
-  {
-    coupling_channel = p_obj_exhaacplus_dec->aac_config.ui_coupling_channel;
+  WORD32 *ptr_time_data = (WORD32 *)ptr_time_data_tmp;
 
+  {
     ind_channel_info = &p_obj_exhaacplus_dec->p_state_aac->ind_cc_info;
 
     out_samp_cc = coup_ch_output;
@@ -308,18 +307,18 @@ void ixheaacd_dec_ind_coupling(
       k = p_obj_exhaacplus_dec->aac_config.slot_element[l];
 
       if (ind_channel_info->cc_target_is_cpe[c] == 0) {
-        WORD16 *p_time_data = &ptr_time_data[k];
+        WORD32 *p_time_data = &ptr_time_data[k];
 
-        WORD32 gain_cc = ind_channel_info->cc_gain[j];
+        WORD16 gain_cc = ixheaacd_round16(ind_channel_info->cc_gain[j]);
 
         ixheaacd_dec_couple_channel(p_time_data, out_samp_cc, frame_size,
                                     total_channels, gain_cc);
       }
       if (ind_channel_info->cc_target_is_cpe[c] == 1) {
         if (ind_channel_info->cc_l[c] == 1) {
-          WORD16 *p_time_data = &ptr_time_data[k];
+          WORD32 *p_time_data = &ptr_time_data[k];
 
-          WORD32 gain_cc = ind_channel_info->cc_gain[j];
+          WORD16 gain_cc = ixheaacd_round16(ind_channel_info->cc_gain[j]);
 
           ixheaacd_dec_couple_channel(p_time_data, out_samp_cc, frame_size,
                                       total_channels, gain_cc);
@@ -328,8 +327,8 @@ void ixheaacd_dec_ind_coupling(
         k = p_obj_exhaacplus_dec->aac_config.slot_element[l];
 
         if (ind_channel_info->cc_r[c] == 1) {
-          WORD16 *p_time_data = &ptr_time_data[k + 1];
-          WORD32 gain_cc = ind_channel_info->cc_gain[j + 1];
+          WORD32 *p_time_data = &ptr_time_data[k + 1];
+          WORD16 gain_cc = ixheaacd_round16(ind_channel_info->cc_gain[j + 1]);
 
           ixheaacd_dec_couple_channel(p_time_data, out_samp_cc, frame_size,
                                       total_channels, gain_cc);

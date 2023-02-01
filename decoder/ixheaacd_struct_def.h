@@ -21,30 +21,16 @@
 #define IXHEAACD_STRUCT_DEF_H
 
 #include <setjmp.h>
+#include <stdbool.h>
+#include "ixheaacd_peak_limiter_struct_def.h"
 
-#define MAX_OUTPUT_CHANNELS (8)
-#define MAX_NUM_OTT (1)
-
-#define MAX_ARBITRARY_TREE_LEVELS (2)
-#define MAX_PARAMETER_SETS (8)
-#define MAX_ARBITRARY_TREE_INDEX ((1 << (MAX_ARBITRARY_TREE_LEVELS + 1)) - 1)
-#define MAX_NUM_QMF_BANDS (64)
-#define MAX_NUM_OTT_AT \
-  (MAX_OUTPUT_CHANNELS * ((1 << MAX_ARBITRARY_TREE_LEVELS) - 1))
-#define MAX_PARAMETER_BANDS (28)
 #define MAX_DECOR_CONFIG_IDX (2)
-
-#define MAX_HYBRID_BANDS (MAX_NUM_QMF_BANDS - 3 + 10)
-
+#define MAX_PARAMETER_BANDS_MPS (28)
 #define MAX_TIME_SLOTS (72)
 
-#define MAX_M2_OUTPUT (8)
-#define QMF_BANDS_TO_HYBRID (3)
-#define PROTO_LEN (13)
-#define BUFFER_LEN_LF (PROTO_LEN - 1 + MAX_TIME_SLOTS)
-#define BUFFER_LEN_HF ((PROTO_LEN - 1) / 2)
-#define MAX_TIME_SLOTS (72)
-#define MAX_NO_TIME_SLOTS_DELAY (14)
+#define MAX_PREROLL_FRAME_OFFSET 4
+// max of escapedValue(4, 4, 8) i.e. 2^4 -1 + 2^4 -1 + 2^8 -1;
+#define MAX_PREROLL_SIZE 285
 
 typedef struct {
   WORD8 element_instance_tag;
@@ -137,6 +123,11 @@ typedef struct {
   WORD32 ui_flush_cmd;
 
   ia_drc_config drc_config_struct;
+  WORD32 output_level;
+  WORD32 i_loud_ref_level;
+  UWORD8 dup_stereo_flag;
+
+  UWORD32 ui_frame_size;
 
 } ia_aac_dec_config_struct;
 
@@ -180,7 +171,7 @@ typedef struct ia_aac_dec_state_struct {
   WORD32 last_frame_ok;
   WORD32 i_bytes_consumed;
 
-  WORD16 *coup_ch_output;
+  WORD32 *coup_ch_output;
   ia_enhaacplus_dec_ind_cc ind_cc_info;
 
   WORD8 protection_absent;
@@ -235,8 +226,21 @@ typedef struct ia_aac_dec_state_struct {
   ia_sbr_header_data_struct str_sbr_config;
   jmp_buf xaac_jmp_buf;
   WORD32 decode_create_done;
+  WORD32 ldmps_present;
   WORD32 fatal_err_present;
   WORD8 *pers_mem_ptr;
+  bool preroll_config_present;
+  UWORD8 preroll_config_prev[MAX_PREROLL_SIZE];
+
+  UWORD8 qshift_cnt;
+  WORD8 qshift_adj[16];
+  UWORD32 delay_in_samples;
+  UWORD8 peak_lim_init;
+  ia_peak_limiter_struct peak_limiter;
+  UWORD8 sbr_present;
+  UWORD8 slot_pos;
+  WORD32 drc_config_changed;
+  WORD32 apply_crossfade;
 } ia_aac_dec_state_struct;
 
 typedef struct ia_exhaacplus_dec_api_struct {
@@ -256,14 +260,14 @@ typedef struct ia_exhaacplus_dec_api_struct {
 
 WORD32 ixheaacd_aacdec_decodeframe(
     ia_exhaacplus_dec_api_struct *p_obj_exhaacplus_dec,
-    ia_aac_dec_scratch_struct *aac_scratch_ptrs, WORD16 *time_data,
+    ia_aac_dec_scratch_struct *aac_scratch_ptrs, VOID *time_data,
     FLAG frame_status, WORD *type, WORD *ch_idx, WORD init_flag, WORD channel,
     WORD *element_index_order, WORD skip_full_decode, WORD ch_fac,
     WORD slot_element, WORD max_channels, WORD32 total_channels,
     WORD32 frame_length, WORD32 frame_size, ia_drc_dec_struct *pstr_drc_dec,
     WORD32 object_type, WORD32 ch_config,
     ia_eld_specific_config_struct eld_specific_config, WORD16 adtsheader,
-    ia_drc_dec_struct *drc_dummy);
+    ia_drc_dec_struct *drc_dummy, WORD32 ldmps_present, UWORD8 *slot_pos);
 
 WORD ixheaacd_get_channel_mask(
     ia_exhaacplus_dec_api_struct *p_obj_exhaacplus_dec);

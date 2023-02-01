@@ -85,6 +85,7 @@ list(
     "${XAAC_ROOT}/decoder/ixheaacd_mps_temp_process.c"
     "${XAAC_ROOT}/decoder/ixheaacd_mps_temp_reshape.c"
     "${XAAC_ROOT}/decoder/ixheaacd_pns_js_thumb.c"
+    "${XAAC_ROOT}/decoder/ixheaacd_peak_limiter.c"
     "${XAAC_ROOT}/decoder/ixheaacd_pred_vec_block.c"
     "${XAAC_ROOT}/decoder/ixheaacd_process.c"
     "${XAAC_ROOT}/decoder/ixheaacd_ps_bitdec.c"
@@ -112,6 +113,8 @@ list(
     "${XAAC_ROOT}/decoder/ixheaacd_huff_code_reorder.c"
     "${XAAC_ROOT}/decoder/ixheaacd_rev_vlc.c"
     "${XAAC_ROOT}/decoder/ixheaacd_qmf_dec.c"
+    "${XAAC_ROOT}/decoder/ixheaacd_ld_mps_dec.c"
+    "${XAAC_ROOT}/decoder/ixheaacd_ld_mps_config.c"
     "${XAAC_ROOT}/decoder/drc_src/impd_drc_api.c"
     "${XAAC_ROOT}/decoder/drc_src/impd_drc_bitbuffer.c"
     "${XAAC_ROOT}/decoder/drc_src/impd_drc_dec.c"
@@ -157,7 +160,12 @@ list(APPEND XAACDEC_SRCS
 
 add_executable(xaacdec ${XAACDEC_SRCS})
 
-target_link_libraries(xaacdec libxaacdec m)
+if(MSVC)
+  target_link_libraries(xaacdec libxaacdec)
+else()
+  target_link_libraries(xaacdec libxaacdec m)
+endif()
+
 set_target_properties(
   xaacdec
   PROPERTIES

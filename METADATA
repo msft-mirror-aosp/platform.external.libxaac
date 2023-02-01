@@ -1,3 +1,15 @@
+name: "libxaac"
+description: "Android fork of the xaac library."
 third_party {
+  url {
+    type: GIT
+    value: "https://github.com/ittiam-systems/libxaac.git"
+  }
+  version: "9d57cec9725da0a4246f31779629e68630ac005c"
   license_type: NOTICE
+  last_upgrade_date {
+    year: 2022
+    month: 12
+    day: 02
+  }
 }
