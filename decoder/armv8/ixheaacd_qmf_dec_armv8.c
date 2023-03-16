@@ -47,14 +47,6 @@
 #include "ixheaacd_function_selector.h"
 #include "ixheaacd_audioobjtypes.h"
 
-#define mult16x16_16(a, b) ixheaacd_mult16((a), (b))
-#define mac16x16(a, b, c) ixheaacd_mac16x16in32_sat((a), (b), (c))
-#define mpy_32x16(a, b) fixmuldiv2_32x16b((a), (b))
-#define mpy_16x16(a, b) ixheaacd_mult16x16in32((a), (b))
-#define mpy_32x32(a, b) ixheaacd_mult32((a), (b))
-#define mpy_32x16H_n(a, b) ixheaacd_mult32x16hin32((a), (b))
-#define msu16x16(a, b, c) msu16x16in32((a), (b), (c))
-
 #define DCT3_LEN (32)
 #define DCT2_LEN (64)
 
@@ -360,12 +352,10 @@ VOID ixheaacd_fwd_modulation(const WORD32 *p_time_in1, WORD32 *real_subband,
 }
 
 VOID ixheaacd_cplx_anal_qmffilt(const WORD16 *time_sample_buf,
-                                ia_sbr_scale_fact_struct *sbr_scale_factor,
-                                WORD32 **qmf_real, WORD32 **qmf_imag,
-                                ia_sbr_qmf_filter_bank_struct *qmf_bank,
-                                ia_qmf_dec_tables_struct *qmf_dec_tables_ptr,
-                                WORD32 ch_fac, WORD32 low_pow_flag,
-                                WORD audio_object_type, WORD32 ldmps_present) {
+                                ia_sbr_scale_fact_struct *sbr_scale_factor, WORD32 **qmf_real,
+                                WORD32 **qmf_imag, ia_sbr_qmf_filter_bank_struct *qmf_bank,
+                                ia_qmf_dec_tables_struct *qmf_dec_tables_ptr, WORD32 ch_fac,
+                                WORD32 low_pow_flag, WORD audio_object_type) {
   WORD32 i, k;
   WORD32 num_time_slots = qmf_bank->num_time_slots;
 
@@ -481,8 +471,8 @@ VOID ixheaacd_cplx_anal_qmffilt(const WORD16 *time_sample_buf,
     }
 
     if (!low_pow_flag) {
-      ixheaacd_fwd_modulation(analysis_buffer, qmf_real[i], qmf_imag[i],
-                              qmf_bank, qmf_dec_tables_ptr, ldmps_present);
+      ixheaacd_fwd_modulation(analysis_buffer, qmf_real[i], qmf_imag[i], qmf_bank,
+                              qmf_dec_tables_ptr, 0);
     } else {
       ixheaacd_dct3_32(
           (WORD32 *)analysis_buffer, qmf_real[i], qmf_dec_tables_ptr->dct23_tw,
@@ -1301,6 +1291,39 @@ VOID ixheaacd_esbr_qmfsyn64_winadd(WORD32 *tmp1, WORD32 *tmp2, WORD32 *inp1,
         ixheaacd_add64(syn_out, ixheaacd_mult64(tmp2[1152 + k], inp1[k + 576]));
 
     sample_buffer[ch_fac * k] = ixheaacd_sat64_32(syn_out >> 31);
+  }
+}
+
+VOID ixheaacd_esbr_qmfsyn32_winadd(WORD32 *tmp1, WORD32 *tmp2, WORD32 *inp1,
+                                   WORD32 *sample_buffer, WORD32 ch_fac) {
+  WORD32 k;
+
+  for (k = 0; k < 32; k++) {
+    WORD64 syn_out = 0;
+
+    syn_out =
+        ixheaacd_add64(syn_out, ixheaacd_mult64(tmp1[0 + k], inp1[2 * (k + 0)]));
+    syn_out =
+        ixheaacd_add64(syn_out, ixheaacd_mult64(tmp1[128 + k], inp1[2 * (k + 64)]));
+    syn_out =
+        ixheaacd_add64(syn_out, ixheaacd_mult64(tmp1[256 + k], inp1[2 * (k + 128)]));
+    syn_out =
+        ixheaacd_add64(syn_out, ixheaacd_mult64(tmp1[384 + k], inp1[2 * (k + 192)]));
+    syn_out =
+        ixheaacd_add64(syn_out, ixheaacd_mult64(tmp1[512 + k], inp1[2 * (k + 256)]));
+
+    syn_out =
+        ixheaacd_add64(syn_out, ixheaacd_mult64(tmp2[64 + k], inp1[2 * (k + 32)]));
+    syn_out =
+        ixheaacd_add64(syn_out, ixheaacd_mult64(tmp2[192 + k], inp1[2 * (k + 96)]));
+    syn_out =
+        ixheaacd_add64(syn_out, ixheaacd_mult64(tmp2[320 + k], inp1[2 * (k + 160)]));
+    syn_out =
+        ixheaacd_add64(syn_out, ixheaacd_mult64(tmp2[448 + k], inp1[2 * (k + 224)]));
+    syn_out =
+        ixheaacd_add64(syn_out, ixheaacd_mult64(tmp2[576 + k], inp1[2 * (k + 288)]));
+
+    sample_buffer[ch_fac * k] = (WORD32)(syn_out >> 31);
   }
 }
 
