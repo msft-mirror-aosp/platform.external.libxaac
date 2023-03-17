@@ -46,7 +46,9 @@
 #include "ixheaacd_drc_data_struct.h"
 
 #include "ixheaacd_lt_predict.h"
-
+#include "ixheaacd_cnst.h"
+#include "ixheaacd_ec_defines.h"
+#include "ixheaacd_ec_struct_def.h"
 #include "ixheaacd_channelinfo.h"
 #include "ixheaacd_drc_dec.h"
 
@@ -78,16 +80,6 @@
 #define AUTO_CORR_LEN_960  36
 
 #define SHIFT 5
-
-static PLATFORM_INLINE WORD32 ixheaacd_mult32x16hin32(WORD32 a, WORD32 b) {
-  WORD32 result;
-  WORD64 temp_result;
-
-  temp_result = (WORD64)(a) * (WORD64)(b >> 16);
-  result = (WORD32)(temp_result >> 16);
-
-  return (result);
-}
 
 static PLATFORM_INLINE WORD32 ixheaacd_mac32x16hin32(WORD32 a, WORD32 b,
                                                      WORD32 c) {
@@ -653,18 +645,16 @@ static PLATFORM_INLINE VOID ixheaacd_filt_step3_lp(WORD len, WORD32 coef1,
     WORD32 temp = ixheaacd_mult32x16hin32(prev2, coef2);
     pqmf_real_low += 64;
 
-    *pqmf_real_high = ixheaacd_add32_sat(
-        (curr >> LPC_SCALE_FACTOR),
-        (ixheaacd_shl32_sat(ixheaacd_mac32x16hin32(temp, prev1, coef1), 1)));
+    *pqmf_real_high = ixheaacd_add32_sat((curr >> LPC_SCALE_FACTOR),
+                                         ((ixheaacd_mac32x16hin32(temp, prev1, coef1)) << 1));
     pqmf_real_high += 64;
 
     prev2 = *pqmf_real_low;
     temp = ixheaacd_mult32x16hin32(prev1, coef2);
     pqmf_real_low += 64;
 
-    *pqmf_real_high = ixheaacd_add32_sat(
-        (prev2 >> LPC_SCALE_FACTOR),
-        (ixheaacd_shl32_sat(ixheaacd_mac32x16hin32(temp, curr, coef1), 1)));
+    *pqmf_real_high = ixheaacd_add32_sat((prev2 >> LPC_SCALE_FACTOR),
+                                         ((ixheaacd_mac32x16hin32(temp, curr, coef1)) << 1));
     pqmf_real_high += 64;
 
     prev1 = prev2;
@@ -916,8 +906,7 @@ VOID ixheaacd_low_pow_hf_generator(ia_sbr_hf_generator_struct *hf_generator,
                                              &cov_matrix_seq[start_patch],
                                              (stop_patch - start_patch),
                                              auto_corr_length);
-     }
-     else
+     } else
       (*ixheaacd_covariance_matrix_calc)(sub_sig_x + start_patch,
                                          &cov_matrix_seq[start_patch],
                                          (stop_patch - start_patch),
@@ -1049,8 +1038,7 @@ VOID ixheaacd_hf_generator(ia_sbr_hf_generator_struct *hf_generator,
           (stop_patch - start_patch), 38);
     }
   } else {
-    if (hf_generator->pstr_settings->num_columns == 15)
-    {
+    if (hf_generator->pstr_settings->num_columns == 15) {
       (*ixheaacd_covariance_matrix_calc_2)(
           &cov_matrix_seq[start_patch],
           (sub_sig_x + start_patch + LPC_ORDER * 128),
