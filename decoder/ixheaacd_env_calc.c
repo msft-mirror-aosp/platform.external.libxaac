@@ -39,6 +39,9 @@
 
 #include "ixheaacd_lt_predict.h"
 
+#include "ixheaacd_cnst.h"
+#include "ixheaacd_ec_defines.h"
+#include "ixheaacd_ec_struct_def.h"
 #include "ixheaacd_channelinfo.h"
 #include "ixheaacd_drc_dec.h"
 
@@ -507,12 +510,10 @@ static PLATFORM_INLINE VOID ixheaacd_adapt_noise_gain_calc(
 
   for (l = start_pos; l < end_pos; l++) {
 
-    if (max_cols != 30)
-    {
+    if (max_cols != 30) {
       if ((l < MAX_COLS)) {
         scale_change = (adj_e - input_e);
-      }
-      else {
+      } else {
         scale_change = (final_e - input_e);
 
         if (((l == MAX_COLS)) && ((start_pos < MAX_COLS))) {
@@ -521,13 +522,10 @@ static PLATFORM_INLINE VOID ixheaacd_adapt_noise_gain_calc(
           ixheaacd_noise_level_rescaling(noise_level_mant, diff, bands, 2);
         }
       }
-    }
-    else
-    {
+    } else {
       if ((l < max_cols)) {
         scale_change = (adj_e - input_e);
-      }
-      else {
+      } else {
         scale_change = (final_e - input_e);
 
         if (((l == max_cols)) && ((start_pos < max_cols))) {
@@ -807,8 +805,7 @@ IA_ERRORCODE ixheaacd_calc_sbrenvelope(
 
       temp_val = ((max_sfb_nrg_exp + 13) >> 1);
 
-      if (num_timeslots != 15)
-      {
+      if (num_timeslots != 15) {
         if ((ptr_border_vec[i] < SBR_TIME_SLOTS)) {
           if ((temp_val > adj_e)) {
             adj_e = (WORD16)temp_val;
@@ -820,9 +817,7 @@ IA_ERRORCODE ixheaacd_calc_sbrenvelope(
             final_e = (WORD16)temp_val;
           }
         }
-      }
-      else
-      {
+      } else {
         if ((ptr_border_vec[i] < num_timeslots)) {
           if ((temp_val > adj_e)) {
             adj_e = (WORD16)temp_val;
@@ -886,6 +881,11 @@ IA_ERRORCODE ixheaacd_calc_sbrenvelope(
           ptr_sbr_tables);
     }
 
+    if (pstr_freq_band_data->freq_band_table[freq_res][0] < pstr_freq_band_data->sub_band_start) {
+      pstr_freq_band_data->sub_band_start = pstr_freq_band_data->freq_band_table[freq_res][0];
+      return IA_FATAL_ERROR;
+    }
+
     ixheaacd_calc_subband_gains(
         pstr_freq_band_data, ptr_frame_data, freq_res, ptr_noise_floor,
         num_sf_bands[freq_res], m, i, sine_mapped_matrix, alias_red_buf,
@@ -908,21 +908,16 @@ IA_ERRORCODE ixheaacd_calc_sbrenvelope(
                                pstr_common_tables);
     }
 
-    if (max_cols != 30)
-    {
+    if (max_cols != 30) {
       if ((start_pos < MAX_COLS)) {
         noise_e = adj_e;
-      }
-      else {
+      } else {
         noise_e = final_e;
       }
-    }
-    else
-    {
+    } else {
       if ((start_pos < max_cols)) {
         noise_e = adj_e;
-      }
-      else {
+      } else {
         noise_e = final_e;
       }
     }
@@ -964,15 +959,12 @@ IA_ERRORCODE ixheaacd_calc_sbrenvelope(
             ptr_frame_data->max_qmf_subband_aac, sub_band_end, 0, first_start,
             low_pow_flag);
 
-        if (max_cols != 30)
-        {
+        if (max_cols != 30) {
           reserve = (*ixheaacd_ixheaacd_expsubbandsamples)(
             anal_buf_real_mant, anal_buf_imag_mant,
             ptr_frame_data->max_qmf_subband_aac, sub_band_end, first_start,
             MAX_COLS, low_pow_flag);
-        }
-        else
-        {
+        } else {
           reserve = (*ixheaacd_ixheaacd_expsubbandsamples)(
             anal_buf_real_mant, anal_buf_imag_mant,
             ptr_frame_data->max_qmf_subband_aac, sub_band_end, first_start,

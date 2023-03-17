@@ -45,8 +45,10 @@
 #include "ixheaacd_drc_data_struct.h"
 
 #include "ixheaacd_lt_predict.h"
-#include "ixheaacd_channelinfo.h"
 #include "ixheaacd_cnst.h"
+#include "ixheaacd_ec_defines.h"
+#include "ixheaacd_ec_struct_def.h"
+#include "ixheaacd_channelinfo.h"
 #include "ixheaacd_drc_dec.h"
 #include "ixheaacd_sbrdecoder.h"
 #include "ixheaacd_block.h"
@@ -368,12 +370,9 @@ VOID ixheaacd_aac_tns_process(
       if (filter->direction == -1) {
         position = stop - 1;
 
-        if (maximum_bins_short == 120)
-        {
+        if (maximum_bins_short == 120) {
           if (((win * maximum_bins_short) + position) < filter->order) continue;
-        }
-        else
-        {
+        } else {
           if (((win << 7) + position) < filter->order) continue;
         }
 
