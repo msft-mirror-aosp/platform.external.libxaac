@@ -20,13 +20,11 @@
 #ifndef IXHEAACD_PEAK_LIMITER_STRUCT_DEF_H
 #define IXHEAACD_PEAK_LIMITER_STRUCT_DEF_H
 
-#define MAX_CHANNEL 6
-/*(PEAK_LIM_SIZE = ATTACK_TIME * MAX_SAMPLING_RATE / 1000) + 1*/
-#define PEAK_LIM_SIZE 481
-#define PEAK_LIM_BUFFER_SIZE PEAK_LIM_SIZE *(MAX_CHANNEL + 1)
-
+#define PEAK_LIM_SIZE (1024 * 16)
 #define DEFAULT_ATTACK_TIME_MS (5.0f)
 #define DEFAULT_RELEASE_TIME_MS (50.0f)
+#define PEAK_LIM_THR_FLOAT (29203.6f)
+#define PEAK_LIM_THR_FIX (2147483647)
 
 typedef struct ia_peak_limiter_struct {
   FLOAT32 attack_time;
@@ -44,7 +42,7 @@ typedef struct ia_peak_limiter_struct {
   UWORD32 delayed_input_index;
   FLOAT32 *max_buf;
   FLOAT32 min_gain;
-  FLOAT32 buffer[PEAK_LIM_BUFFER_SIZE];
+  FLOAT32 buffer[PEAK_LIM_SIZE];
   WORD32 max_idx;
   WORD32 cir_buf_pnt;
 } ia_peak_limiter_struct;
