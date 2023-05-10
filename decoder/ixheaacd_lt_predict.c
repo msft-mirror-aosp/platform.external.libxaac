@@ -29,15 +29,17 @@
 #include "ixheaacd_basic_ops40.h"
 
 #include "ixheaacd_defines.h"
+#include "ixheaacd_cnst.h"
 #include "ixheaacd_aac_rom.h"
+#include "ixheaacd_lt_predict.h"
+#include "ixheaacd_ec_defines.h"
+#include "ixheaacd_ec_struct_def.h"
 #include "ixheaacd_audioobjtypes.h"
 
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_pulsedata.h"
 #include "ixheaacd_pns.h"
-#include "ixheaacd_lt_predict.h"
 #include "ixheaacd_channelinfo.h"
-#include "ixheaacd_cnst.h"
 #include "ixheaacd_tns.h"
 #include "ixheaacd_aac_imdct.h"
 
@@ -395,7 +397,7 @@ VOID ixheaacd_filter_bank_ltp(ia_aac_dec_tables_struct *aac_tables_ptr,
   }
 }
 
-VOID ixheaacd_lt_update_state(WORD16 *lt_pred_stat, void *time_t,
+VOID ixheaacd_lt_update_state(WORD16 *lt_pred_stat, VOID *time_t,
                               WORD32 *overlap, WORD32 frame_len,
                               WORD32 object_type, WORD32 stride,
                               WORD16 window_sequence, WORD16 *p_window_next,
