@@ -19,8 +19,8 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include "ixheaacd_type_def.h"
-#include "ixheaacd_error_standards.h"
+#include "ixheaac_type_def.h"
+#include "ixheaac_error_standards.h"
 #include "ixheaacd_memory_standards.h"
 #include "ixheaacd_sbrdecsettings.h"
 #include "ixheaacd_sbr_scale.h"
@@ -57,7 +57,7 @@
 #include "ixheaacd_mps_struct_def.h"
 #include "ixheaacd_mps_res_rom.h"
 #include "ixheaacd_mps_aac_struct.h"
-#include "ixheaacd_constants.h"
+#include "ixheaac_constants.h"
 #include "ixheaacd_mps_dec.h"
 #include "ixheaacd_struct_def.h"
 #include "ixheaacd_bitbuffer.h"
@@ -69,14 +69,14 @@
 #include "ixheaacd_info.h"
 #include "ixheaacd_sbrdecoder.h"
 #include "ixheaacd_mps_polyphase.h"
-#include "ixheaacd_sbr_const.h"
+#include "ixheaac_sbr_const.h"
 #include "ixheaacd_main.h"
 #include "ixheaacd_arith_dec.h"
 #include "ixheaacd_config.h"
 #include "ixheaacd_struct.h"
 #include "ixheaacd_create.h"
 #include "ixheaacd_dec_main.h"
-#include "ixheaacd_error_standards.h"
+#include "ixheaac_error_standards.h"
 #include "ixheaacd_headerdecode.h"
 #include "ixheaacd_error_codes.h"
 VOID ixheaacd_samples_sat(WORD8 *outbuffer, WORD32 num_samples_out,
@@ -392,7 +392,7 @@ WORD32 ixheaacd_dec_main(VOID *temp_handle, WORD8 *inbuffer, WORD8 *outbuffer,
     }
     pstr_dec_data->str_usac_data.usac_flag = aac_dec_handle->usac_flag;
     pstr_dec_data->str_usac_data.esbr_hq = handle->aac_config.ui_hq_esbr;
-    pstr_dec_data->str_usac_data.enh_sbr = handle->aac_config.ui_enh_sbr;
+    pstr_dec_data->str_usac_data.enh_sbr = 1;
     pstr_dec_data->str_usac_data.enh_sbr_ps = handle->aac_config.ui_enh_sbr_ps;
     if (pstr_dec_data->dec_bit_buf.size > pstr_dec_data->dec_bit_buf.max_size)
       pstr_dec_data->dec_bit_buf.max_size = pstr_dec_data->dec_bit_buf.size;
@@ -496,7 +496,7 @@ WORD32 ixheaacd_dec_main(VOID *temp_handle, WORD8 *inbuffer, WORD8 *outbuffer,
 
       pstr_dec_data->str_usac_data.usac_flag = aac_dec_handle->usac_flag;
       pstr_dec_data->str_usac_data.esbr_hq = handle->aac_config.ui_hq_esbr;
-      pstr_dec_data->str_usac_data.enh_sbr = handle->aac_config.ui_enh_sbr;
+      pstr_dec_data->str_usac_data.enh_sbr = 1;
       pstr_dec_data->str_usac_data.enh_sbr_ps = handle->aac_config.ui_enh_sbr_ps;
 
       if (preroll_frame_offset[access_units] &&
