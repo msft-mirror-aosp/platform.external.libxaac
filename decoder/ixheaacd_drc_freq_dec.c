@@ -20,18 +20,18 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 #include "ixheaacd_sbr_common.h"
 
 #include "ixheaacd_cnst.h"
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops16.h"
-#include "ixheaacd_basic_ops40.h"
-#include "ixheaacd_basic_ops.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops16.h"
+#include "ixheaac_basic_ops40.h"
+#include "ixheaac_basic_ops.h"
 #include "ixheaacd_bitbuffer.h"
-#include "ixheaacd_error_standards.h"
-#include "ixheaacd_basic_op.h"
+#include "ixheaac_error_standards.h"
+#include "ixheaac_basic_op.h"
 #include "ixheaacd_intrinsics.h"
 #include "ixheaacd_defines.h"
 
@@ -877,8 +877,8 @@ static WORD32 ixheaacd_drc_get_bottom_qmf(WORD32 bottom, WORD32 frame_size) {
 };
 
 VOID ixheaacd_drc_apply(ia_drc_dec_struct *pstr_drc_dec,
-                        WORD32 *ptr_spectral_coef, WORD32 win_seq,
-                        WORD32 channel, WORD32 frame_size, WORD32 audio_object_type) {
+                        WORD32 *ptr_spectral_coef, WORD32 win_seq, WORD32 channel,
+                        WORD32 frame_size, WORD32 esbr_flag, WORD32 audio_object_type) {
   WORD32 drc_band, spec_pos, start_pos, end_pos;
   WORD32 low_hi, drc_norm, drc_freq_fac;
   WORD32 drc_fac, div_val, mod_val, ret_val, offset_value;
@@ -893,7 +893,8 @@ VOID ixheaacd_drc_apply(ia_drc_dec_struct *pstr_drc_dec,
   WORD32 prev_frame_drc_sbr_factors[64];
   WORD32 *ptr_drc_fac;
 
-  if ((audio_object_type != AOT_ER_AAC_ELD) && (audio_object_type != AOT_ER_AAC_LD))
+  if ((audio_object_type != AOT_ER_AAC_ELD) && (audio_object_type != AOT_ER_AAC_LD)
+      && esbr_flag)
   {
     for (i = 0; i < SBR_QMF_SUB_SAMPLES; i++)
     {

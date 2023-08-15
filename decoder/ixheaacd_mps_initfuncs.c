@@ -18,12 +18,12 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include <string.h>
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 #include "ixheaacd_mps_struct_def.h"
 #include "ixheaacd_mps_res_rom.h"
 #include "ixheaacd_mps_aac_struct.h"
 #include "ixheaacd_sbr_common.h"
-#include "ixheaacd_constants.h"
+#include "ixheaac_constants.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_aac_rom.h"
 #include "ixheaacd_error_codes.h"
@@ -269,13 +269,13 @@ VOID ixheaacd_set_scratch_buffers(ia_heaac_mps_state_struct *pstr_mps_state, VOI
   WORD32 scratch_used;
   ia_mps_dec_reuse_array_struct *p_array_struct = pstr_mps_state->array_struct;
 
-  p_array_struct->qmf_residual_real = scratch_mem;
-  scratch_used = QMF_RES_BUF_SIZE;
+  p_array_struct->res_mdct = scratch_mem;
+  scratch_used = MDCT_RES_BUF_SIZE;
+
+  p_array_struct->qmf_residual_real = (WORD32 *)((WORD8 *)scratch_mem + scratch_used);
+  scratch_used += QMF_RES_BUF_SIZE;
   p_array_struct->qmf_residual_imag = (WORD32 *)((WORD8 *)scratch_mem + scratch_used);
   scratch_used += QMF_RES_BUF_SIZE;
-
-  p_array_struct->res_mdct = (WORD32 *)((WORD8 *)scratch_mem + scratch_used);
-  scratch_used += MDCT_RES_BUF_SIZE;
 
   p_array_struct->m_qmf_real = (WORD32 *)((WORD8 *)scratch_mem + scratch_used);
   scratch_used += QMF_BUF_SIZE;
