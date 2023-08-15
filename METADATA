@@ -5,11 +5,11 @@ third_party {
     type: GIT
     value: "https://github.com/ittiam-systems/libxaac.git"
   }
-  version: "v0.1.5"
+  version: "v0.1.7"
   license_type: NOTICE
   last_upgrade_date {
     year: 2023
-    month: 3
-    day: 13
+    month: 8
+    day: 10
   }
 }
