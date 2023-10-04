@@ -20,7 +20,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 
 #include "ixheaacd_bitbuffer.h"
 
@@ -38,7 +38,7 @@
 #include "ixheaacd_drc_dec.h"
 #include "ixheaacd_sbrdecoder.h"
 #include "ixheaacd_mps_polyphase.h"
-#include "ixheaacd_sbr_const.h"
+#include "ixheaac_sbr_const.h"
 #include "ixheaacd_ec_defines.h"
 #include "ixheaacd_ec_struct_def.h"
 #include "ixheaacd_main.h"
@@ -322,8 +322,8 @@ VOID ixheaacd_section_data(ia_usac_data_struct *usac_data,
   g_bs->bit_pos = 7 - bit_pos;
   {
     WORD32 bits_consumed;
-    bits_consumed = ((g_bs->ptr_read_next - start_read_pos) << 3) +
-                             (start_bit_pos - g_bs->bit_pos);
+    bits_consumed = (WORD32)(((g_bs->ptr_read_next - start_read_pos) << 3) +
+                             (start_bit_pos - g_bs->bit_pos));
     g_bs->cnt_bits -= bits_consumed;
   }
 }
