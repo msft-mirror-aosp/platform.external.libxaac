@@ -18,6 +18,7 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
  */
 
+#include <float.h>
 #include <math.h>
 #include <stdlib.h>
 
@@ -261,10 +262,13 @@ static FLOAT32 iaace_bitres_calc_bitfac(const WORD32 bitres_bits, const WORD32 m
                                         ia_adj_thr_elem_struct *pstr_adj_the_elem) {
   ia_bitres_param_struct *pstr_bitres_params;
   FLOAT32 pex;
-  FLOAT32 fill_lvl;
+  FLOAT32 fill_lvl = 0.0f;
   FLOAT32 bit_save, bit_spend, bitres_factor;
 
-  fill_lvl = (FLOAT32)bitres_bits / (FLOAT32)max_bitres_bits;
+  if (max_bitres_bits) {
+    fill_lvl = (FLOAT32)bitres_bits / max_bitres_bits;
+  }
+
   if (win_seq != SHORT_WINDOW) {
     pstr_bitres_params = &(pstr_adj_thr_state->str_bitres_params_long);
   } else {
@@ -281,8 +285,11 @@ static FLOAT32 iaace_bitres_calc_bitfac(const WORD32 bitres_bits, const WORD32 m
       (FLOAT32)1.0f - bit_save +
       ((bit_spend + bit_save) / (pstr_adj_the_elem->pe_max - pstr_adj_the_elem->pe_min)) *
           (pex - pstr_adj_the_elem->pe_min);
-  bitres_factor = MIN(bitres_factor,
-                      (FLOAT32)1.0f - (FLOAT32)0.3f + (FLOAT32)bitres_bits / (FLOAT32)avg_bits);
+  if (avg_bits)
+  {
+    bitres_factor = MIN(bitres_factor,
+      (FLOAT32)1.0f - (FLOAT32)0.3f + (FLOAT32)bitres_bits / (FLOAT32)avg_bits);
+  }
 
   bitres_factor = MIN(bitres_factor, max_bit_fac);
 
@@ -851,7 +858,7 @@ static VOID iaace_adapt_thr_to_pe(
   FLOAT32 const_part, const_part_no_ah;
   FLOAT32 num_active_lines, num_active_lines_no_ah;
   FLOAT32 desired_pe_no_ah;
-  FLOAT32 avg_thr_exp, redval;
+  FLOAT32 redval = 0.0f;
   WORD32 ah_flag[IXHEAACE_MAX_CH_IN_BS_ELE][MAXIMUM_GROUPED_SCALE_FACTOR_BAND];
   FLOAT32 thr_exp[IXHEAACE_MAX_CH_IN_BS_ELE][MAXIMUM_GROUPED_SCALE_FACTOR_BAND];
   WORD32 iteration;
@@ -863,13 +870,14 @@ static VOID iaace_adapt_thr_to_pe(
   no_red_pe = pstr_qs_pe_data->pe;
   const_part = pstr_qs_pe_data->const_part;
   num_active_lines = pstr_qs_pe_data->num_active_lines;
-  avg_thr_exp =
-      (FLOAT32)pow(2.0f, (const_part - no_red_pe) / (INV_RED_EXP_VAL * num_active_lines));
-  redval = (FLOAT32)pow(2.0f, (const_part - desired_pe) / (INV_RED_EXP_VAL * num_active_lines)) -
-           avg_thr_exp;
-  redval = MAX(0.0f, redval);
-
-  iaace_reduce_thr(pstr_psy_out, ah_flag, thr_exp, redval, num_channels, chn);
+  if (num_active_lines > FLT_EPSILON) {
+    FLOAT32 avg_thr_exp =
+        (FLOAT32)pow(2.0f, (const_part - no_red_pe) / (INV_RED_EXP_VAL * num_active_lines));
+    redval = (FLOAT32)pow(2.0f, (const_part - desired_pe) / (INV_RED_EXP_VAL * num_active_lines))
+             - avg_thr_exp;
+    redval = MAX(0.0f, redval);
+    iaace_reduce_thr(pstr_psy_out, ah_flag, thr_exp, redval, num_channels, chn);
+  }
 
   iaace_calc_sfb_pe_data(pstr_qs_pe_data, pstr_psy_out, num_channels, chn);
   red_pe = pstr_qs_pe_data->pe;
@@ -881,8 +889,8 @@ static VOID iaace_adapt_thr_to_pe(
 
     desired_pe_no_ah = MAX(desired_pe - (red_pe - red_pe_no_ah), 0);
 
-    if (num_active_lines_no_ah > 0) {
-      avg_thr_exp = (FLOAT32)pow(
+    if (num_active_lines_no_ah > FLT_EPSILON) {
+      FLOAT32 avg_thr_exp = (FLOAT32)pow(
           2.0f, (const_part_no_ah - red_pe_no_ah) / (INV_RED_EXP_VAL * num_active_lines_no_ah));
       redval += (FLOAT32)pow(2.0f, (const_part_no_ah - desired_pe_no_ah) /
                                        (INV_RED_EXP_VAL * num_active_lines_no_ah)) -
