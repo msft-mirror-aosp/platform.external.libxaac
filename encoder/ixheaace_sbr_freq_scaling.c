@@ -292,21 +292,7 @@ ixheaace_get_sbr_start_freq_raw(WORD32 start_freq, WORD32 qmf_bands, WORD32 fs) 
 
   result = (result * fs / qmf_bands + 1) >> 1;
 
-  return (result);
-}
-
-WORD32 ixheaace_get_sbr_stop_freq_raw(WORD32 stop_freq, WORD32 qmf_bands, WORD32 fs) {
-  WORD32 result;
-
-  if ((stop_freq < 0) || (stop_freq > 13)) {
-    return -1;
-  }
-
-  result = ixheaace_get_stop_freq(fs, stop_freq);
-
-  result = (result * fs / qmf_bands + 1) >> 1;
-
-  return (result);
+  return result;
 }
 
 static WORD32 ixheaace_number_of_bands(WORD32 b_p_o, WORD32 start, WORD32 stop,
@@ -582,6 +568,14 @@ ixheaace_update_freq_scale(UWORD8 *ptr_k_master, WORD32 *ptr_num_bands, const WO
 
   if (*ptr_num_bands < 1) {
     return IA_EXHEAACE_INIT_FATAL_SBR_INVALID_NUM_BANDS;
+  }
+
+  if (sbr_rate == IXHEAACE_QUAD_RATE) {
+    for (i = 1; i < *ptr_num_bands; i++) {
+      if (!(ptr_k_master[i] - ptr_k_master[i - 1] <= k0 - 2)) {
+        return IA_EXHEAACE_INIT_FATAL_SBR_INVALID_NUM_BANDS;
+      }
+    }
   }
 
   return err_code;
