@@ -38,12 +38,12 @@
 
 #include "ixheaace_sbr_rom.h"
 #include "ixheaace_common_rom.h"
+#include "ixheaace_sbr_hbe.h"
 #include "ixheaace_sbr_qmf_enc.h"
 #include "ixheaace_sbr_tran_det.h"
 #include "ixheaace_sbr_frame_info_gen.h"
 #include "ixheaace_sbr_env_est.h"
 #include "ixheaace_sbr_code_envelope.h"
-#include "ixheaace_sbr_hbe.h"
 #include "ixheaace_sbr_main.h"
 #include "ixheaace_sbr_missing_harmonics_det.h"
 #include "ixheaace_sbr_inv_filtering_estimation.h"
@@ -70,12 +70,12 @@
 #include "ixheaace_resampler.h"
 #include "ixheaace_sbr_rom.h"
 #include "ixheaace_common_rom.h"
+#include "ixheaace_sbr_hbe.h"
 #include "ixheaace_sbr_qmf_enc.h"
 #include "ixheaace_sbr_tran_det.h"
 #include "ixheaace_sbr_frame_info_gen.h"
 #include "ixheaace_sbr_env_est.h"
 #include "ixheaace_sbr_code_envelope.h"
-#include "ixheaace_sbr_hbe.h"
 #include "ixheaace_psy_const.h"
 #include "ixheaace_tns.h"
 #include "ixheaace_tns_params.h"
@@ -719,10 +719,12 @@ static IA_ERRORCODE ixheaace_update_esbr_ext_data(
 
 static VOID ixheaace_update_harmonic_sbr_data(
     WORD32 transient_info[][3], WORD32 coupling,
-    struct ixheaace_str_sbr_env_data *pstr_sbr_env_left,
-    struct ixheaace_str_sbr_env_data *pstr_sbr_env_right, WORD32 num_channels) {
+    ixheaace_pstr_enc_channel *pstr_enc_ch, WORD32 num_channels) {
   WORD32 bin, bin1;
+  struct ixheaace_str_sbr_env_data *pstr_sbr_env_left = NULL;
+  struct ixheaace_str_sbr_env_data *pstr_sbr_env_right = NULL;
   if (1 == num_channels) {
+    pstr_sbr_env_left = &pstr_enc_ch[0]->enc_env_data;
     bin = pstr_sbr_env_left->sbr_pitchin_bins;
     if (transient_info[0][1] != 0) {
       pstr_sbr_env_left->sbr_preprocessing = 1;
@@ -748,6 +750,8 @@ static VOID ixheaace_update_harmonic_sbr_data(
       pstr_sbr_env_left->sbr_patching_mode = 1;
     }
   } else {
+    pstr_sbr_env_left = &pstr_enc_ch[0]->enc_env_data;
+    pstr_sbr_env_right = &pstr_enc_ch[1]->enc_env_data;
     pstr_sbr_env_left->sbr_coupling = coupling;
     pstr_sbr_env_right->sbr_coupling = coupling;
     bin = pstr_sbr_env_left->sbr_pitchin_bins;
@@ -1813,8 +1817,11 @@ IA_ERRORCODE ixheaace_extract_sbr_envelope(FLOAT32 *ptr_in_time, FLOAT32 *ptr_co
 
   ixheaace_sbr_stereo_mode stereo_mode = pstr_sbr_cfg->stereo_mode;
   struct ixheaace_str_sbr_env_data *pstr_env_0 = &(pstr_env_ch[0]->enc_env_data);
-  struct ixheaace_str_sbr_env_data *pstr_env_1 = &(pstr_env_ch[1]->enc_env_data);
+  struct ixheaace_str_sbr_env_data *pstr_env_1 = NULL;
 
+  if (num_channels > 1) {
+    pstr_env_1 = &(pstr_env_ch[1]->enc_env_data);
+  }
   ixheaace_freq_res res[MAXIMUM_NUM_NOISE_VALUES];
   WORD32 *ptr_v_tuning;
   WORD32 v_tuning_lc_sbr[6] = {0, 2, 4, 0, 0, 0};
@@ -1834,7 +1841,7 @@ IA_ERRORCODE ixheaace_extract_sbr_envelope(FLOAT32 *ptr_in_time, FLOAT32 *ptr_co
       (WORD32 *)pstr_env_ch[0]->str_sbr_extract_env.ptr_r_buffer[0];
 
   WORD32 max_quant_error;
-  ixheaace_str_esbr_bs_data str_esbr = { 0 };
+  ixheaace_str_esbr_bs_data str_esbr = {0};
   WORD32 samp_ratio_fac = DOWNSAMPLE_FAC_2_1;
   if ((pstr_env_enc->str_sbr_cfg.sbr_codec == USAC_SBR) &&
       (pstr_env_enc->str_sbr_cfg.sbr_ratio_idx == USAC_SBR_RATIO_INDEX_4_1)) {
@@ -2124,9 +2131,8 @@ IA_ERRORCODE ixheaace_extract_sbr_envelope(FLOAT32 *ptr_in_time, FLOAT32 *ptr_co
         pstr_sbr_extract_env->ptr_y_buffer + pstr_sbr_extract_env->y_buffer_write_offset,
         pstr_sbr_extract_env->ptr_r_buffer, pstr_sbr_extract_env->ptr_i_buffer,
         pstr_sbr_cfg->is_ld_sbr, pstr_env_ch[ch]->str_sbr_qmf.num_time_slots, samp_ratio_fac,
-        pstr_hbe_enc->qmf_buf_real, pstr_hbe_enc->qmf_buf_imag,
-        (IXHEAACE_OP_DELAY_OFFSET + IXHEAACE_ESBR_HBE_DELAY_OFFSET + IXHEAACE_SBR_HF_ADJ_OFFSET),
-        pstr_sbr_hdr->sbr_harmonic);
+        pstr_hbe_enc, (IXHEAACE_OP_DELAY_OFFSET + IXHEAACE_ESBR_HBE_DELAY_OFFSET +
+        IXHEAACE_SBR_HF_ADJ_OFFSET), pstr_sbr_hdr->sbr_harmonic);
 
     ixheaace_calculate_tonality_quotas(
         &pstr_env_ch[ch]->str_ton_corr, pstr_sbr_extract_env->ptr_r_buffer,
@@ -2880,8 +2886,7 @@ IA_ERRORCODE ixheaace_extract_sbr_envelope(FLOAT32 *ptr_in_time, FLOAT32 *ptr_co
 
   if ((pstr_sbr_cfg->sbr_codec == USAC_SBR) && (pstr_sbr_hdr->sbr_harmonic)) {
     ixheaace_update_harmonic_sbr_data(transient_info, pstr_sbr_hdr->coupling,
-                                      &pstr_env_ch[0]->enc_env_data,
-                                      &pstr_env_ch[1]->enc_env_data, num_channels);
+                                      &pstr_env_ch[0], num_channels);
   }
   if (num_channels == 2) {
     WORD32 num_bits;
