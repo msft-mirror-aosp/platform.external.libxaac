@@ -356,6 +356,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
   pWORD8 pb_inp_buf = NULL;
   WORD32 input_size = 0;
+  WORD32 num_proc_iterations = 0;
 
   /* ******************************************************************/
   /* The API config structure                                         */
@@ -381,8 +382,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   if (err_code) {
     if (pstr_drc_cfg) {
       free(pstr_drc_cfg);
+      pstr_drc_cfg = NULL;
     }
-    return 0;
+    /* Fatal error code */
+    if (err_code & 0x80000000) {
+      ixheaace_delete((pVOID)pstr_out_cfg);
+      return 0;
+    }
   }
 
   pv_ia_process_api_obj = pstr_out_cfg->pv_ia_process_api_obj;
@@ -400,11 +406,18 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   while (fuzzed_data.remaining_bytes()) {
     if (fuzzed_data.ConsumeBool()) {
       std::vector<WORD8> inputVec = fuzzed_data.ConsumeBytes<WORD8>(input_size);
-      memcpy(pb_inp_buf, inputVec.data(), inputVec.size());
+      if (inputVec.size()) {
+        memcpy(pb_inp_buf, inputVec.data(), inputVec.size());
+      }
     } else {
       memset(pb_inp_buf, fuzzed_data.ConsumeIntegral<WORD8>(), input_size);
     }
     ixheaace_process(pv_ia_process_api_obj, (pVOID)pstr_in_cfg, (pVOID)pstr_out_cfg);
+    num_proc_iterations++;
+
+    /* Stop processing after 500 frames */
+    if (num_proc_iterations > 500)
+      break;
   }
 
   ixheaace_delete((pVOID)pstr_out_cfg);
