@@ -17,6 +17,12 @@
 test "${SRC}" != "" || exit 1
 test "${WORK}" != "" || exit 1
 
+#Opt out of shift sanitizer in undefined sanitizer
+if [[ $SANITIZER = *undefined* ]]; then
+  CFLAGS="$CFLAGS -fno-sanitize=shift"
+  CXXFLAGS="$CXXFLAGS -fno-sanitize=shift"
+fi
+
 # Build libxaac
 build_dir=$WORK/build
 rm -rf ${build_dir}
@@ -24,8 +30,10 @@ mkdir -p ${build_dir}
 pushd ${build_dir}
 
 cmake $SRC/libxaac
-make -j$(nproc) xaac_dec_fuzzer
+make -j$(nproc) xaac_dec_fuzzer xaac_enc_fuzzer
 cp ${build_dir}/xaac_dec_fuzzer $OUT/
+cp ${build_dir}/xaac_enc_fuzzer $OUT/
 popd
 
-cp $SRC/libxaac/fuzzer/xaac_dec_fuzzer.dict $OUT/xaac_dec_fuzzer.dict
+cp $SRC/libxaac/fuzzer/xaac_dec_fuzzer.dict $OUT/
+cp $SRC/libxaac/fuzzer/xaac_enc_fuzzer.dict $OUT/

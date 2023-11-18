@@ -78,6 +78,7 @@
 #include "ixheaace_resampler.h"
 #include "ixheaace_sbr_rom.h"
 #include "ixheaace_common_rom.h"
+#include "ixheaace_sbr_hbe.h"
 #include "ixheaace_sbr_qmf_enc.h"
 #include "ixheaace_sbr_tran_det.h"
 #include "ixheaace_sbr_frame_info_gen.h"
@@ -92,7 +93,6 @@
 #include "ixheaace_sbr_ton_corr.h"
 #include "iusace_esbr_pvc.h"
 #include "iusace_esbr_inter_tes.h"
-#include "ixheaace_sbr_hbe.h"
 #include "ixheaace_sbr.h"
 #include "ixheaace_sbr_cmondata.h"
 #include "ixheaace_sbr_crc.h"
@@ -507,7 +507,7 @@ WORD32 iusace_limitbitrate(WORD32 core_sample_rate, WORD32 frame_len, WORD32 num
 IA_ERRORCODE iusace_enc_init(ia_usac_encoder_config_struct *ptr_usac_config,
                              ixheaace_audio_specific_config_struct *pstr_asc,
                              ia_usac_data_struct *pstr_state) {
-  WORD32 err_code = 0;
+  IA_ERRORCODE err_code = IA_NO_ERROR;
   WORD32 i, j, k, idx, i_ch;
   UWORD32 elem_idx = 0;
   ia_usac_data_struct *usac_data = (pstr_state);
@@ -557,20 +557,25 @@ IA_ERRORCODE iusace_enc_init(ia_usac_encoder_config_struct *ptr_usac_config,
 
     err_code = impd_drc_enc_init(&usac_data->str_drc_state, pstr_state->str_scratch.drc_scratch,
                                  &ptr_usac_config->str_drc_cfg);
+    if (err_code == IA_EXHEAACE_EXE_NONFATAL_USAC_INVALID_GAIN_POINTS) {
+      ptr_usac_config->use_drc_element = 0;
+    }
     if (err_code & IA_FATAL_ERROR) {
       return err_code;
     }
 
-    ia_usac_enc_element_config_struct *pstr_usac_elem_config =
+    if (ptr_usac_config->use_drc_element) {
+      ia_usac_enc_element_config_struct *pstr_usac_elem_config =
         &(pstr_asc_usac_config->str_usac_element_config[pstr_asc_usac_config->num_elements]);
-    pstr_asc_usac_config->usac_element_type[pstr_asc_usac_config->num_elements] = ID_USAC_EXT;
-    pstr_usac_elem_config->usac_ext_ele_type = ID_EXT_ELE_UNI_DRC;
-    pstr_usac_elem_config->usac_ext_ele_dflt_len_present = 0;
-    pstr_usac_elem_config->usac_ext_ele_payload_present = 0;
-    pstr_usac_elem_config->drc_config_data = usac_data->str_drc_state.bit_buf_base_cfg;
-    pstr_usac_elem_config->usac_ext_ele_cfg_len =
+      pstr_asc_usac_config->usac_element_type[pstr_asc_usac_config->num_elements] = ID_USAC_EXT;
+      pstr_usac_elem_config->usac_ext_ele_type = ID_EXT_ELE_UNI_DRC;
+      pstr_usac_elem_config->usac_ext_ele_dflt_len_present = 0;
+      pstr_usac_elem_config->usac_ext_ele_payload_present = 0;
+      pstr_usac_elem_config->drc_config_data = usac_data->str_drc_state.bit_buf_base_cfg;
+      pstr_usac_elem_config->usac_ext_ele_cfg_len =
         (usac_data->str_drc_state.drc_config_data_size_bit + 7) >> 3;
-    pstr_asc_usac_config->num_elements++;
+      pstr_asc_usac_config->num_elements++;
+    }
   }
   if (ptr_usac_config->use_drc_element)  // For Loudness
   {
@@ -620,7 +625,7 @@ IA_ERRORCODE iusace_enc_init(ia_usac_encoder_config_struct *ptr_usac_config,
         case ID_USAC_EXT:
           break;
         default:
-          return -1;
+          return IA_EXHEAACE_INIT_FATAL_USAC_INVALID_ELEMENT_TYPE;
       }
     }
 
@@ -640,7 +645,7 @@ IA_ERRORCODE iusace_enc_init(ia_usac_encoder_config_struct *ptr_usac_config,
         case ID_USAC_EXT:
           break;
         default:
-          return -1;
+          return IA_EXHEAACE_INIT_FATAL_USAC_INVALID_ELEMENT_TYPE;
       }
 
       usac_data->str_qc_main.str_qc_data[ch_idx].num_ch = 1;
@@ -769,12 +774,14 @@ IA_ERRORCODE iusace_enc_init(ia_usac_encoder_config_struct *ptr_usac_config,
         usac_data->pstr_tns_info[i_ch]->max_sfb_long =
             usac_data->str_psy_mod.str_psy_long_config[ch_idx].sfb_count;
 
-        if (iusace_tns_init(ptr_usac_config->core_sample_rate,
+        err_code = iusace_tns_init(ptr_usac_config->core_sample_rate,
                             usac_data->str_qc_main.str_qc_data[ch_idx].ch_bitrate /
                                 usac_data->str_qc_main.str_qc_data[ch_idx].num_ch,
                             usac_data->pstr_tns_info[i_ch],
-                            usac_data->str_qc_main.str_qc_data[ch_idx].num_ch))
-          return -1;
+                            usac_data->str_qc_main.str_qc_data[ch_idx].num_ch);
+        if (err_code) {
+          return err_code;
+        }
       }
     }
   }
@@ -934,7 +941,8 @@ IA_ERRORCODE ixheaace_usac_encode(FLOAT32 **ptr_input,
                                   ia_usac_data_struct *pstr_state,
                                   ixheaace_audio_specific_config_struct *pstr_asc,
                                   ia_bit_buf_struct *pstr_it_bit_buff,
-                                  ixheaace_pstr_sbr_enc ptr_env_encoder, FLOAT32 **pp_drc_inp) {
+                                  ixheaace_pstr_sbr_enc ptr_env_encoder, FLOAT32 **pp_drc_inp,
+                                  WORD32 *is_quant_spec_zero, WORD32 *is_gain_limited) {
   IA_ERRORCODE err = IA_NO_ERROR;
   WORD32 i_ch, i, k;
   ia_usac_data_struct *ptr_usac_data = pstr_state;
@@ -1026,7 +1034,7 @@ IA_ERRORCODE ixheaace_usac_encode(FLOAT32 **ptr_input,
           ptr_usac_data->core_mode_next[i_ch] = CORE_MODE_TD;
           break;
         default:
-          return (-1);
+          return IA_EXHEAACE_INIT_FATAL_USAC_INVALID_CODEC_MODE;
       }
       if (ptr_usac_data->core_mode[i_ch] == CORE_MODE_TD) {
         for (i = 0; i < ptr_usac_config->ccfl; i++) {
@@ -1287,7 +1295,7 @@ IA_ERRORCODE ixheaace_usac_encode(FLOAT32 **ptr_input,
             : ((ptr_usac_data->core_mode[ch_offset] == CORE_MODE_FD))) {
       err = iusace_fd_encode(pstr_sfb_prms, usac_independency_flg, ptr_usac_data, ptr_usac_config,
                              pstr_it_bit_buff, nr_core_coder_channels, ch_offset, elem_idx,
-                             &bits_written);
+                             &bits_written, is_quant_spec_zero, is_gain_limited);
 
       if (err) {
         return err;
@@ -1334,5 +1342,5 @@ IA_ERRORCODE ixheaace_usac_encode(FLOAT32 **ptr_input,
     ptr_usac_data->available_bitreservoir_bits = ptr_usac_data->max_bitreservoir_bits;
   }
 
-  return 0;
+  return err;
 }
