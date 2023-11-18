@@ -22,6 +22,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <float.h>
 #include "iusace_type_def.h"
 #include "ixheaac_error_standards.h"
 #include "ixheaace_error_codes.h"
@@ -201,10 +202,12 @@ static FLOAT32 iusace_bitres_calc_bitfac(const WORD32 bitres_bits, const WORD32 
                                          const WORD32 avg_bits, const FLOAT32 max_bit_fac,
                                          ia_adj_thr_elem_struct *pstr_adj_thr_elem) {
   FLOAT32 pex;
-  FLOAT32 fill_lvl;
+  FLOAT32 fill_lvl = 0.0f;
   FLOAT32 bit_save, bit_spend, bitres_factor;
 
-  fill_lvl = (FLOAT32)bitres_bits / (FLOAT32)max_bitres_bits;
+  if (max_bitres_bits) {
+    fill_lvl = (FLOAT32)bitres_bits / max_bitres_bits;
+  }
 
   if (win_seq != EIGHT_SHORT_SEQUENCE) {
     fill_lvl = MAX(fill_lvl, CLIP_SAVE_LO_LONG);
@@ -795,7 +798,7 @@ static IA_ERRORCODE iusace_adapt_thr_to_pe(ia_psy_mod_out_data_struct *pstr_psy_
   FLOAT32 const_part, const_part_no_ah;
   FLOAT32 nactive_lines, nactive_lines_no_ah;
   FLOAT32 desired_pe_no_ah;
-  FLOAT32 avg_thr_exp, redval;
+  FLOAT32 redval = 0.0f;
   WORD32 *ah_flag[2];
   WORD32 iteration;
   for (WORD32 i = 0; i < 2; i++) {
@@ -815,12 +818,14 @@ static IA_ERRORCODE iusace_adapt_thr_to_pe(ia_psy_mod_out_data_struct *pstr_psy_
   no_red_pe = pstr_qs_pe_data->pe;
   const_part = pstr_qs_pe_data->const_part;
   nactive_lines = pstr_qs_pe_data->num_active_lines;
-  avg_thr_exp = (FLOAT32)pow(2.0f, (const_part - no_red_pe) / (INV_RED_EXP_VAL * nactive_lines));
-  redval = (FLOAT32)pow(2.0f, (const_part - desired_pe) / (INV_RED_EXP_VAL * nactive_lines)) -
-           avg_thr_exp;
-  redval = MAX(0.0f, redval);
-
-  iusace_reduce_thr(pstr_psy_out, ah_flag, thr_exp, redval, num_channels, chn);
+  if (nactive_lines > FLT_EPSILON) {
+    FLOAT32 avg_thr_exp = (FLOAT32)pow(2.0f, (const_part - no_red_pe) /
+                  (INV_RED_EXP_VAL * nactive_lines));
+    redval = (FLOAT32)pow(2.0f, (const_part - desired_pe) / (INV_RED_EXP_VAL * nactive_lines)) -
+             avg_thr_exp;
+    redval = MAX(0.0f, redval);
+    iusace_reduce_thr(pstr_psy_out, ah_flag, thr_exp, redval, num_channels, chn);
+  }
 
   iusace_calc_sfb_pe_data(pstr_qs_pe_data, pstr_psy_out, num_channels, chn);
   red_pe = pstr_qs_pe_data->pe;
@@ -831,8 +836,8 @@ static IA_ERRORCODE iusace_adapt_thr_to_pe(ia_psy_mod_out_data_struct *pstr_psy_
                                    pstr_qs_pe_data, ah_flag, pstr_psy_out, num_channels, chn);
 
     desired_pe_no_ah = MAX(desired_pe - (red_pe - red_pe_no_ah), 0);
-    if (nactive_lines_no_ah > 0) {
-      avg_thr_exp = (FLOAT32)pow(
+    if (nactive_lines_no_ah > FLT_EPSILON) {
+      FLOAT32 avg_thr_exp = (FLOAT32)pow(
           2.0f, (const_part_no_ah - red_pe_no_ah) / (INV_RED_EXP_VAL * nactive_lines_no_ah));
       redval += (FLOAT32)pow(2.0f, (const_part_no_ah - desired_pe_no_ah) /
                                        (INV_RED_EXP_VAL * nactive_lines_no_ah)) -
@@ -1171,7 +1176,7 @@ static WORD16 iusace_improve_scf(FLOAT32 *ptr_spec, FLOAT32 *ptr_exp_spec, WORD1
 
     count = 0;
 
-    while ((sfb_dist > (1.25 * threshold)) && (count++ < 3)) {
+    while ((sfb_dist > (1.25 * threshold)) && (count++ < SCF_COUNT_LIMIT_THREE)) {
       scf++;
 
       sfb_dist =
@@ -1189,7 +1194,8 @@ static WORD16 iusace_improve_scf(FLOAT32 *ptr_spec, FLOAT32 *ptr_exp_spec, WORD1
     scf = estimated_scf;
     sfb_dist = best_sfb_dist;
 
-    while ((sfb_dist > (1.25 * threshold)) && (count++ < 1) && (scf > min_scf)) {
+    while ((sfb_dist > (1.25 * threshold)) && (count++ < SCF_COUNT_LIMIT_ONE) &&
+      (scf > min_scf)) {
       scf--;
 
       sfb_dist =
@@ -1209,7 +1215,7 @@ static WORD16 iusace_improve_scf(FLOAT32 *ptr_spec, FLOAT32 *ptr_exp_spec, WORD1
     FLOAT32 allowed_sfb_dist = MIN(sfb_dist * 1.25f, threshold);
     WORD32 count;
 
-    for (count = 0; count < 3; count++) {
+    for (count = 0; count < SCF_COUNT_LIMIT_THREE; count++) {
       scf++;
 
       sfb_dist =
@@ -1604,14 +1610,15 @@ VOID iusace_estimate_scfs_chan(ia_psy_mod_out_data_struct *pstr_psy_out,
       min_sf_max_quant[i] = MIN_SHRT_VAL;
 
       if ((max_spec > 0.0) && (energy > thresh) && (p_sfb_form_factor[i] != MIN_FLT_VAL)) {
-        energy_part = (FLOAT32)log10(p_sfb_form_factor[i]);
+        energy_part = (FLOAT32)log10(p_sfb_form_factor[i] + FLT_EPSILON);
 
         thr_part = (FLOAT32)log10(6.75 * thresh + MIN_FLT_VAL);
         scf_float = 8.8585f * (thr_part - energy_part);
         scf_int = (WORD16)floor(scf_float);
         min_sf_max_quant[i] = (WORD16)ceil(C1_SF + C2_SF * log(max_spec));
         scf_int = MAX(scf_int, min_sf_max_quant[i]);
-
+        scf_int = MAX(scf_int, MIN_GAIN_INDEX);
+        scf_int = MIN(scf_int, (MAX_GAIN_INDEX - SCF_COUNT_LIMIT_THREE));
         for (j = 0; j < ptr_psy_out->sfb_offsets[i + 1] - ptr_psy_out->sfb_offsets[i]; j++) {
           ptr_exp_spec[ptr_psy_out->sfb_offsets[i] + j] =
               (FLOAT32)(ptr_psy_out->ptr_spec_coeffs[ptr_psy_out->sfb_offsets[i] + j]);

@@ -20,7 +20,7 @@
 
 #include <string.h>
 #include <math.h>
-
+#include <float.h>
 #include "ixheaac_type_def.h"
 #include "ixheaac_constants.h"
 #include "ixheaac_error_standards.h"
@@ -35,12 +35,12 @@
 #include "ixheaace_resampler.h"
 #include "ixheaace_sbr_rom.h"
 #include "ixheaace_common_rom.h"
+#include "ixheaace_sbr_hbe.h"
 #include "ixheaace_sbr_qmf_enc.h"
 #include "ixheaace_sbr_tran_det.h"
 #include "ixheaace_sbr_frame_info_gen.h"
 #include "ixheaace_sbr_env_est.h"
 #include "ixheaace_sbr_code_envelope.h"
-#include "ixheaace_sbr_hbe.h"
 #include "ixheaace_sbr_main.h"
 #include "ixheaace_sbr_missing_harmonics_det.h"
 #include "ixheaace_sbr_inv_filtering_estimation.h"
@@ -50,6 +50,7 @@
 #include "iusace_esbr_pvc.h"
 #include "iusace_esbr_inter_tes.h"
 #include "ixheaace_sbr.h"
+#include "ixheaace_common_utils.h"
 
 static VOID ia_enhaacplus_enc_diff(FLOAT32 *ptr_tonal_orig, FLOAT32 *ptr_diff_map_2_scfb,
                                    const UWORD8 *ptr_freq_band_tab, WORD32 n_scfb,
@@ -538,7 +539,7 @@ static VOID ia_enhaacplus_enc_calculate_comp_vector(
           comp_val = SBR_MAX_COMP;
         }
 
-        if ((FLOAT32)1.0f / ptr_diff[max_pos_est][i - 1] >
+        if (ixheaace_div32((FLOAT32)1.0f, ptr_diff[max_pos_est][i - 1]) >
             (SBR_DIFF_QUOTA * ptr_diff[max_pos_est][i])) {
           ptr_env_compensation[i - 1] = -1 * comp_val;
         }
@@ -549,7 +550,7 @@ static VOID ia_enhaacplus_enc_calculate_comp_vector(
           comp_val = SBR_MAX_COMP;
         }
 
-        if ((FLOAT32)1.0f / ptr_diff[max_pos_est][i + 1] >
+        if (ixheaace_div32((FLOAT32)1.0f, ptr_diff[max_pos_est][i + 1]) >
             (SBR_DIFF_QUOTA * ptr_diff[max_pos_est][i])) {
           ptr_env_compensation[i + 1] = comp_val;
         }

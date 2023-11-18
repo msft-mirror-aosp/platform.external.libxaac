@@ -18,6 +18,7 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
  */
 #include <math.h>
+#include <float.h>
 #include "ixheaac_type_def.h"
 #include "ixheaac_error_standards.h"
 #include "ixheaace_error_codes.h"
@@ -45,6 +46,7 @@
 #include "impd_drc_gain_enc.h"
 #include "impd_drc_struct_def.h"
 #include "impd_drc_enc.h"
+#include "ixheaace_common_utils.h"
 
 static VOID impd_drc_compand_update_volume(ia_drc_compand_chan_param_struct *pstr_channel_param,
                                            FLOAT64 in_value) {
@@ -67,7 +69,12 @@ static FLOAT64 impd_drc_compand_get_volume(ia_drc_compand_struct *pstr_drc_compa
     return pstr_drc_compand->out_min_lin;
   }
 
-  in_log = log(in_lin);
+  if (fabs(in_lin) <= FLT_EPSILON) {
+    in_log = log(FLT_EPSILON);
+  }
+  else {
+    in_log = log(fabs(in_lin));
+  }
 
   for (idx = 1; idx < pstr_drc_compand->nb_segments; idx++) {
     if (in_log <= pstr_drc_compand->str_segment[idx].x) {
@@ -121,8 +128,6 @@ IA_ERRORCODE impd_drc_td_drc_gain_calc_init(ia_drc_gain_enc_struct *pstr_drc_gai
   pstr_drc_compand =
       &pstr_drc_gain_enc->str_drc_compand[drc_coefficients_uni_drc_idx][gain_set_idx];
 
-  pstr_drc_compand->nb_segments = (pstr_drc_compand->nb_points + 4) * 2;
-
   for (i = 0; i < pstr_drc_compand->nb_points; i++) {
     if (i && pstr_drc_compand->str_segment[2 * ((i - 1) + 1)].x >
                  pstr_drc_compand->str_segment[2 * ((i) + 1)].x) {
@@ -161,6 +166,7 @@ IA_ERRORCODE impd_drc_td_drc_gain_calc_init(ia_drc_gain_enc_struct *pstr_drc_gai
     }
   }
 
+  pstr_drc_compand->nb_segments = num_points * 2;
   for (i = 0; i < pstr_drc_compand->nb_segments; i += 2) {
     pstr_drc_compand->str_segment[i].y += pstr_drc_compand->gain_db;
     pstr_drc_compand->str_segment[i].x *= M_LN10_DIV_20;
@@ -168,35 +174,33 @@ IA_ERRORCODE impd_drc_td_drc_gain_calc_init(ia_drc_gain_enc_struct *pstr_drc_gai
   }
 
   for (i = 4; i < pstr_drc_compand->nb_segments; i += 2) {
+    FLOAT64 num = 0.0;
+    FLOAT64 den = 0.0f;
+
+    num = pstr_drc_compand->str_segment[i - 2].y - pstr_drc_compand->str_segment[i - 4].y;
+    den = pstr_drc_compand->str_segment[i - 2].x - pstr_drc_compand->str_segment[i - 4].x;
+    length = hypot(num, den);
+    if (length < FLT_EPSILON) {
+      return IA_EXHEAACE_EXE_NONFATAL_USAC_INVALID_GAIN_POINTS;
+    }
     pstr_drc_compand->str_segment[i - 4].a = 0;
-    pstr_drc_compand->str_segment[i - 4].b =
-        (pstr_drc_compand->str_segment[i - 2].y - pstr_drc_compand->str_segment[i - 4].y) /
-        (pstr_drc_compand->str_segment[i - 2].x - pstr_drc_compand->str_segment[i - 4].x);
-
-    pstr_drc_compand->str_segment[i - 2].a = 0;
-    pstr_drc_compand->str_segment[i - 2].b =
-        (pstr_drc_compand->str_segment[i].y - pstr_drc_compand->str_segment[i - 2].y) /
-        (pstr_drc_compand->str_segment[i].x - pstr_drc_compand->str_segment[i - 2].x);
-
-    theta =
-        atan2(pstr_drc_compand->str_segment[i - 2].y - pstr_drc_compand->str_segment[i - 4].y,
-              pstr_drc_compand->str_segment[i - 2].x - pstr_drc_compand->str_segment[i - 4].x);
-    length =
-        hypot(pstr_drc_compand->str_segment[i - 2].x - pstr_drc_compand->str_segment[i - 4].x,
-              pstr_drc_compand->str_segment[i - 2].y - pstr_drc_compand->str_segment[i - 4].y);
-
+    pstr_drc_compand->str_segment[i - 4].b = ixheaace_div64(num, den);
+    theta = atan2(num, den);
     r = MIN(radius, length);
     pstr_drc_compand->str_segment[i - 3].x =
         pstr_drc_compand->str_segment[i - 2].x - r * cos(theta);
     pstr_drc_compand->str_segment[i - 3].y =
         pstr_drc_compand->str_segment[i - 2].y - r * sin(theta);
 
-    theta =
-        atan2(pstr_drc_compand->str_segment[i].y - pstr_drc_compand->str_segment[i - 2].y,
-              pstr_drc_compand->str_segment[i - 0].x - pstr_drc_compand->str_segment[i - 2].x);
-    length = hypot(pstr_drc_compand->str_segment[i].x - pstr_drc_compand->str_segment[i - 2].x,
-                   pstr_drc_compand->str_segment[i].y - pstr_drc_compand->str_segment[i - 2].y);
-
+    num = pstr_drc_compand->str_segment[i].y - pstr_drc_compand->str_segment[i - 2].y;
+    den = pstr_drc_compand->str_segment[i].x - pstr_drc_compand->str_segment[i - 2].x;
+    length = hypot(num, den);
+    if (length < FLT_EPSILON) {
+      return IA_EXHEAACE_EXE_NONFATAL_USAC_INVALID_GAIN_POINTS;
+    }
+    pstr_drc_compand->str_segment[i - 2].a = 0;
+    pstr_drc_compand->str_segment[i - 2].b = ixheaace_div64(num, den);
+    theta = atan2(num, den);
     r = MIN(radius, length / 2);
     x = pstr_drc_compand->str_segment[i - 2].x + r * cos(theta);
     y = pstr_drc_compand->str_segment[i - 2].y + r * sin(theta);
@@ -213,9 +217,14 @@ IA_ERRORCODE impd_drc_td_drc_gain_calc_init(ia_drc_gain_enc_struct *pstr_drc_gai
     out_1 = cy - pstr_drc_compand->str_segment[i - 3].y;
     inp_2 = pstr_drc_compand->str_segment[i - 2].x - pstr_drc_compand->str_segment[i - 3].x;
     out_2 = pstr_drc_compand->str_segment[i - 2].y - pstr_drc_compand->str_segment[i - 3].y;
-    pstr_drc_compand->str_segment[i - 3].a = (out_2 / inp_2 - out_1 / inp_1) / (inp_2 - inp_1);
-    pstr_drc_compand->str_segment[i - 3].b =
-        out_1 / inp_1 - pstr_drc_compand->str_segment[i - 3].a * inp_1;
+
+    num = (out_2 * inp_1) - (inp_2 * out_1);
+    den = (inp_2 - inp_1) * inp_1 * inp_2;
+    pstr_drc_compand->str_segment[i - 3].a = ixheaace_div64(num, den);
+
+    num = out_1 - (pstr_drc_compand->str_segment[i - 3].a * inp_1 * inp_1);
+    den = inp_1;
+    pstr_drc_compand->str_segment[i - 3].b = ixheaace_div64(num, den);
   }
   pstr_drc_compand->str_segment[i - 3].x = 0;
   pstr_drc_compand->str_segment[i - 3].y = pstr_drc_compand->str_segment[i - 3].y;
@@ -325,7 +334,7 @@ IA_ERRORCODE impd_drc_stft_drc_gain_calc_init(ia_drc_gain_enc_struct *pstr_drc_g
                                               WORD32 gain_set_idx, WORD32 band_idx) {
   ULOOPIDX i, j;
   UWORD32 num_points;
-  FLOAT32 width_e;
+  FLOAT32 width_e, tmp;
   FLOAT64 g1, g2;
   FLOAT64 x, y, cx, cy, r;
   FLOAT64 inp_1, inp_2, out_1, out_2, theta, len;
@@ -342,8 +351,6 @@ IA_ERRORCODE impd_drc_stft_drc_gain_calc_init(ia_drc_gain_enc_struct *pstr_drc_g
            ->str_drc_stft_gain_handle[drc_coefficients_uni_drc_idx][gain_set_idx][band_idx];
 
   width_e = (FLOAT32)(pstr_drc_stft_gain_handle->width_db * M_LN10_DIV_20);
-
-  pstr_drc_stft_gain_handle->nb_segments = (pstr_drc_stft_gain_handle->nb_points + 4) * 2;
 
   for (i = 0; i < pstr_drc_stft_gain_handle->nb_points; i++) {
     if (i && pstr_drc_stft_gain_handle->str_segment[2 * ((i - 1) + 1)].x >
@@ -384,7 +391,7 @@ IA_ERRORCODE impd_drc_stft_drc_gain_calc_init(ia_drc_gain_enc_struct *pstr_drc_g
           pstr_drc_stft_gain_handle->str_segment[2 * (j + 1)];
     }
   }
-
+  pstr_drc_stft_gain_handle->nb_segments = num_points * 2;
   for (i = 0; i < pstr_drc_stft_gain_handle->nb_segments; i += 2) {
     pstr_drc_stft_gain_handle->str_segment[i].y += pstr_drc_stft_gain_handle->gain_db;
     pstr_drc_stft_gain_handle->str_segment[i].x *= M_LN10_DIV_20;
@@ -392,42 +399,39 @@ IA_ERRORCODE impd_drc_stft_drc_gain_calc_init(ia_drc_gain_enc_struct *pstr_drc_g
   }
 
   for (i = 4; i < pstr_drc_stft_gain_handle->nb_segments; i += 2) {
+    FLOAT64 denominator;
+    FLOAT64 numerator;
+
+    denominator = pstr_drc_stft_gain_handle->str_segment[i - 2].x -
+                  pstr_drc_stft_gain_handle->str_segment[i - 4].x;
+    numerator = pstr_drc_stft_gain_handle->str_segment[i - 2].y -
+                pstr_drc_stft_gain_handle->str_segment[i - 4].y;
+    len = hypot(denominator , numerator);
+    if (len < FLT_EPSILON) {
+      return IA_EXHEAACE_EXE_NONFATAL_USAC_INVALID_GAIN_POINTS;
+    }
     pstr_drc_stft_gain_handle->str_segment[i - 4].a = 0;
-    pstr_drc_stft_gain_handle->str_segment[i - 4].b =
-        (pstr_drc_stft_gain_handle->str_segment[i - 2].y -
-         pstr_drc_stft_gain_handle->str_segment[i - 4].y) /
-        (pstr_drc_stft_gain_handle->str_segment[i - 2].x -
-         pstr_drc_stft_gain_handle->str_segment[i - 4].x);
+    pstr_drc_stft_gain_handle->str_segment[i - 4].b = ixheaace_div64(numerator, denominator);
+    theta = atan2(numerator, denominator);
+    r = MIN(width_e / (2.0f * cos(theta)), len / 2);
 
-    pstr_drc_stft_gain_handle->str_segment[i - 2].a = 0;
-    pstr_drc_stft_gain_handle->str_segment[i - 2].b =
-        (pstr_drc_stft_gain_handle->str_segment[i].y -
-         pstr_drc_stft_gain_handle->str_segment[i - 2].y) /
-        (pstr_drc_stft_gain_handle->str_segment[i].x -
-         pstr_drc_stft_gain_handle->str_segment[i - 2].x);
-
-    theta = atan2(pstr_drc_stft_gain_handle->str_segment[i - 2].y -
-                      pstr_drc_stft_gain_handle->str_segment[i - 4].y,
-                  pstr_drc_stft_gain_handle->str_segment[i - 2].x -
-                      pstr_drc_stft_gain_handle->str_segment[i - 4].x);
-    len = hypot(pstr_drc_stft_gain_handle->str_segment[i - 2].x -
-                    pstr_drc_stft_gain_handle->str_segment[i - 4].x,
-                pstr_drc_stft_gain_handle->str_segment[i - 2].y -
-                    pstr_drc_stft_gain_handle->str_segment[i - 4].y);
-    r = MIN(width_e / (2.0f * cos(theta)), len);
     pstr_drc_stft_gain_handle->str_segment[i - 3].x =
-        pstr_drc_stft_gain_handle->str_segment[i - 2].x - r * cos(theta);
+      pstr_drc_stft_gain_handle->str_segment[i - 2].x - r * cos(theta);
     pstr_drc_stft_gain_handle->str_segment[i - 3].y =
-        pstr_drc_stft_gain_handle->str_segment[i - 2].y - r * sin(theta);
+      pstr_drc_stft_gain_handle->str_segment[i - 2].y - r * sin(theta);
 
-    theta = atan2(pstr_drc_stft_gain_handle->str_segment[i].y -
-                      pstr_drc_stft_gain_handle->str_segment[i - 2].y,
-                  pstr_drc_stft_gain_handle->str_segment[i].x -
-                      pstr_drc_stft_gain_handle->str_segment[i - 2].x);
-    len = hypot(pstr_drc_stft_gain_handle->str_segment[i].x -
-                    pstr_drc_stft_gain_handle->str_segment[i - 2].x,
-                pstr_drc_stft_gain_handle->str_segment[i].y -
-                    pstr_drc_stft_gain_handle->str_segment[i - 2].y);
+    denominator = pstr_drc_stft_gain_handle->str_segment[i].x -
+                  pstr_drc_stft_gain_handle->str_segment[i - 2].x;
+    numerator = pstr_drc_stft_gain_handle->str_segment[i].y -
+                pstr_drc_stft_gain_handle->str_segment[i - 2].y;
+    len = hypot(denominator, numerator);
+    if (len < FLT_EPSILON) {
+      return IA_EXHEAACE_EXE_NONFATAL_USAC_INVALID_GAIN_POINTS;
+    }
+    pstr_drc_stft_gain_handle->str_segment[i - 2].a = 0;
+    pstr_drc_stft_gain_handle->str_segment[i - 2].b = ixheaace_div64(numerator, denominator);
+
+    theta = atan2(numerator, denominator);
     r = MIN(width_e / (2.0f * cos(theta)), len / 2);
     x = pstr_drc_stft_gain_handle->str_segment[i - 2].x + r * cos(theta);
     y = pstr_drc_stft_gain_handle->str_segment[i - 2].y + r * sin(theta);
@@ -448,10 +452,13 @@ IA_ERRORCODE impd_drc_stft_drc_gain_calc_init(ia_drc_gain_enc_struct *pstr_drc_g
             pstr_drc_stft_gain_handle->str_segment[i - 3].x;
     out_2 = pstr_drc_stft_gain_handle->str_segment[i - 2].y -
             pstr_drc_stft_gain_handle->str_segment[i - 3].y;
-    pstr_drc_stft_gain_handle->str_segment[i - 3].a =
-        (out_2 / inp_2 - out_1 / inp_1) / (inp_2 - inp_1);
-    pstr_drc_stft_gain_handle->str_segment[i - 3].b =
-        out_1 / inp_1 - pstr_drc_stft_gain_handle->str_segment[i - 3].a * inp_1;
+    numerator = (out_2 * inp_1) - (inp_2 * out_1);
+    denominator = (inp_2 - inp_1) * inp_2 * inp_1;
+    pstr_drc_stft_gain_handle->str_segment[i - 3].a = ixheaace_div64(numerator, denominator);
+
+    numerator = out_1 - (pstr_drc_stft_gain_handle->str_segment[i - 3].a * inp_1 * inp_1);
+    denominator = inp_1;
+    pstr_drc_stft_gain_handle->str_segment[i - 3].b = ixheaace_div64(numerator, denominator);
   }
   pstr_drc_stft_gain_handle->str_segment[i - 3].x = 0;
   pstr_drc_stft_gain_handle->str_segment[i - 3].y =
@@ -470,13 +477,23 @@ IA_ERRORCODE impd_drc_stft_drc_gain_calc_init(ia_drc_gain_enc_struct *pstr_drc_g
     pstr_drc_stft_gain_handle->yl_z1[i] = 0.0f;
   }
 
-  pstr_drc_stft_gain_handle->alpha_a =
-      expf(-1.0f / ((pstr_drc_stft_gain_handle->attack_ms / (FLOAT32)STFT256_HOP_SIZE) *
-                    (FLOAT32)pstr_drc_gain_enc->sample_rate * 0.001f));
+  tmp = (pstr_drc_stft_gain_handle->attack_ms / STFT256_HOP_SIZE) *
+      pstr_drc_gain_enc->sample_rate * 0.001f;
+  if ((fabs(tmp) < FLT_EPSILON) && (tmp >= 0.0f)) {
+    pstr_drc_stft_gain_handle->alpha_a = 0;
+  }
+  else {
+    pstr_drc_stft_gain_handle->alpha_a = expf(ixheaace_div32(-1.0f, tmp));
+  }
 
-  pstr_drc_stft_gain_handle->alpha_r =
-      expf(-1.0f / ((pstr_drc_stft_gain_handle->release_ms / (FLOAT32)STFT256_HOP_SIZE) *
-                    (FLOAT32)pstr_drc_gain_enc->sample_rate * 0.001f));
+  tmp = (pstr_drc_stft_gain_handle->release_ms / STFT256_HOP_SIZE) *
+      pstr_drc_gain_enc->sample_rate * 0.001f;
+  if ((fabs(tmp) < FLT_EPSILON) && (tmp >= 0.0f)) {
+    pstr_drc_stft_gain_handle->alpha_r = 0;
+  }
+  else {
+    pstr_drc_stft_gain_handle->alpha_r = expf(ixheaace_div32(-1.0f, tmp));
+  }
 
   return IA_NO_ERROR;
 }
