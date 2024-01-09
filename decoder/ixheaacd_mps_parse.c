@@ -825,12 +825,21 @@ IA_ERRORCODE ixheaacd_ld_mps_frame_parsing(
     bits_param_slot = 4;
 
   if (bs_frame_type) {
+    WORD32 prev_param_slot = -1;
     for (i = 0; i < self->num_parameter_sets; i++) {
-      self->param_slots[i] =
-          ixheaacd_read_bits_buf(it_bit_buff, bits_param_slot);
+      self->param_slots[i] = ixheaacd_read_bits_buf(it_bit_buff, bits_param_slot);
+
+      if (prev_param_slot >= self->param_slots[i] || self->param_slots[i] >= self->time_slots) {
+        return IA_FATAL_ERROR;
+      }
+      prev_param_slot = self->param_slots[i];
     }
   } else {
-    self->param_slots[0] = self->time_slots - 1;
+    for (i = 0; i < self->num_parameter_sets; i++) {
+      self->param_slots[i] = (((self->time_slots * (i + 1)) + self->num_parameter_sets - 1) /
+                              self->num_parameter_sets) -
+                             1;
+    }
   }
 
   frame->independency_flag = ixheaacd_read_bits_buf(it_bit_buff, 1);
@@ -1304,7 +1313,8 @@ IA_ERRORCODE ixheaacd_mps_frame_decode(ia_mps_dec_state_struct *self) {
       (WORD32)floor(self->inv_param_slot_diff[0] * 1073741824 + 0.5);
   for (i = 1; i < self->num_parameter_sets; i++) {
     self->param_slot_diff[i] = self->param_slots[i] - self->param_slots[i - 1];
-    if (MAX_TIME_SLOTS < (self->param_slot_diff[0] + self->param_slot_diff[i])) {
+    if ((MAX_TIME_SLOTS < (self->param_slot_diff[0] + self->param_slot_diff[i])) ||
+        (self->param_slot_diff[i] == 0)) {
       if (self->ec_flag == 0) {
         return -1;
       } else {
