@@ -539,9 +539,6 @@ static VOID ixheaace_validate_config_params(ixheaace_input_config *pstr_input_co
       pstr_input_config->aot != AOT_SBR && pstr_input_config->aot != AOT_USAC) {
     pstr_input_config->aot = AOT_AAC_LC;
   }
-  if (1 == pstr_input_config->usac_en) {
-    pstr_input_config->aot = AOT_USAC;
-  }
   pstr_input_config->i_native_samp_freq = pstr_input_config->i_samp_freq;
   if (pstr_input_config->i_samp_freq < 9391) {
     pstr_input_config->i_samp_freq = 8000;
@@ -677,25 +674,26 @@ static VOID ixheaace_validate_config_params(ixheaace_input_config *pstr_input_co
       if (pstr_input_config->ccfl_idx == NO_SBR_CCFL_768 ||
           pstr_input_config->ccfl_idx == NO_SBR_CCFL_1024) {
         if (pstr_input_config->i_bitrate >
-            (6 * pstr_input_config->i_samp_freq * pstr_input_config->i_channels)) {
+            (WORD32)(6 * pstr_input_config->i_samp_freq * pstr_input_config->i_channels)) {
           pstr_input_config->i_bitrate =
               (6 * pstr_input_config->i_samp_freq * pstr_input_config->i_channels);
         }
       } else if (pstr_input_config->ccfl_idx == SBR_8_3) {
         if (pstr_input_config->i_bitrate >
-            (6 * ((pstr_input_config->i_samp_freq * 3) / 8) * pstr_input_config->i_channels)) {
+            (WORD32)(6 * ((pstr_input_config->i_samp_freq * 3) / 8) *
+                     pstr_input_config->i_channels)) {
           pstr_input_config->i_bitrate =
               (6 * ((pstr_input_config->i_samp_freq * 3) / 8) * pstr_input_config->i_channels);
         }
       } else if (pstr_input_config->ccfl_idx == SBR_2_1) {
         if (pstr_input_config->i_bitrate >
-            (6 * (pstr_input_config->i_samp_freq / 2) * pstr_input_config->i_channels)) {
+            (WORD32)(6 * (pstr_input_config->i_samp_freq / 2) * pstr_input_config->i_channels)) {
           pstr_input_config->i_bitrate =
               (6 * (pstr_input_config->i_samp_freq / 2) * pstr_input_config->i_channels);
         }
       } else if (pstr_input_config->ccfl_idx == SBR_4_1) {
         if (pstr_input_config->i_bitrate >
-            (6 * (pstr_input_config->i_samp_freq / 4) * pstr_input_config->i_channels)) {
+            (WORD32)(6 * (pstr_input_config->i_samp_freq / 4) * pstr_input_config->i_channels)) {
           pstr_input_config->i_bitrate =
               (6 * (pstr_input_config->i_samp_freq / 4) * pstr_input_config->i_channels);
         }
@@ -763,7 +761,7 @@ static VOID ixheaace_validate_config_params(ixheaace_input_config *pstr_input_co
         pstr_input_config->i_bitrate = MINIMUM_BITRATE * pstr_input_config->i_channels;
       }
       if (pstr_input_config->i_bitrate >
-          (6 * pstr_input_config->i_samp_freq * pstr_input_config->i_channels)) {
+          (WORD32)(6 * pstr_input_config->i_samp_freq * pstr_input_config->i_channels)) {
         pstr_input_config->i_bitrate =
             (6 * pstr_input_config->i_samp_freq * pstr_input_config->i_channels);
       }
@@ -784,6 +782,10 @@ static VOID ixheaace_validate_config_params(ixheaace_input_config *pstr_input_co
       } else {
         pstr_input_config->frame_length = LEN_SUPERFRAME;
       }
+    }
+    if ((pstr_input_config->frame_length == FRAME_LEN_960) &&
+        (pstr_input_config->esbr_flag == 1)) {
+      pstr_input_config->esbr_flag = 0;
     }
   }
 }
@@ -3318,7 +3320,9 @@ IA_ERRORCODE ixheaace_allocate(pVOID pv_input, pVOID pv_output) {
   ixheaace_input_config *pstr_input_config = (ixheaace_input_config *)pv_input;
   ixheaace_output_config *pstr_output_config = (ixheaace_output_config *)pv_output;
   ixheaace_api_struct *pstr_api_struct;
-
+  if (1 == pstr_input_config->usac_en) {
+    pstr_input_config->aot = AOT_USAC;
+  }
   if (pstr_input_config->aot != AOT_AAC_ELD && pstr_input_config->aot != AOT_AAC_LC &&
       pstr_input_config->aot != AOT_AAC_LD && pstr_input_config->aot != AOT_SBR &&
       pstr_input_config->aot != AOT_PS && pstr_input_config->aot != AOT_USAC) {
@@ -3601,6 +3605,9 @@ IA_ERRORCODE ixheaace_process(pVOID pstr_obj_ixheaace, pVOID pv_input, pVOID pv_
   if (!pstr_api_struct->usac_en) {
     for (ele_idx = 0; ele_idx < pstr_api_struct->config[0].num_bs_elements; ele_idx++) {
       error = ia_enhaacplus_enc_execute(pstr_api_struct, ele_idx);
+      if (error != IA_NO_ERROR) {
+        return error;
+      }
     }
     if ((error == IA_NO_ERROR) && (pstr_api_struct->pstr_state->is_quant_spec_zero)) {
       error = IA_EXHEAACE_EXE_NONFATAL_QUANTIZATION_SPECTRUM_ZERO;
