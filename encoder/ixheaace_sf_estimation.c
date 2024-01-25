@@ -621,8 +621,8 @@ static VOID iaace_assimilate_multiple_scf(ixheaace_psy_out_channel *pstr_psy_out
 }
 
 VOID iaace_estimate_scfs_chan(
-    ixheaace_psy_out_channel pstr_psy_out[IXHEAACE_MAX_CH_IN_BS_ELE],
-    ixheaace_qc_out_channel pstr_qc_out_chan[IXHEAACE_MAX_CH_IN_BS_ELE],
+    ixheaace_psy_out_channel **pstr_psy_out,
+    ixheaace_qc_out_channel **pstr_qc_out_chan,
     FLOAT32 sfb_form_factor_ch[IXHEAACE_MAX_CH_IN_BS_ELE][MAXIMUM_GROUPED_SCALE_FACTOR_BAND],
     FLOAT32 sfb_num_relevant_lines_ch[][MAXIMUM_GROUPED_SCALE_FACTOR_BAND], WORD32 num_channels,
     WORD32 chn, WORD32 frame_len_long) {
@@ -648,19 +648,19 @@ VOID iaace_estimate_scfs_chan(
   memset(ptr_exp_spec, 0, frame_len_long * sizeof(ptr_exp_spec[0]));
 
   for (ch = chn; ch < chn + num_channels; ch++) {
-    ixheaace_psy_out_channel *pstr_psy_out_chan = &pstr_psy_out[ch];
-    pstr_qc_out_chan[ch].global_gain = 0;
+    ixheaace_psy_out_channel *pstr_psy_out_chan = pstr_psy_out[ch];
+    pstr_qc_out_chan[ch]->global_gain = 0;
 
-    memset(pstr_qc_out_chan[ch].scalefactor, 0,
-           sizeof(*pstr_qc_out_chan[ch].scalefactor) * pstr_psy_out[ch].sfb_count);
-    memset(pstr_qc_out_chan[ch].quant_spec, 0,
-           sizeof(*pstr_qc_out_chan[ch].quant_spec) * frame_len_long);
+    memset(pstr_qc_out_chan[ch]->scalefactor, 0,
+           sizeof(*pstr_qc_out_chan[ch]->scalefactor) * pstr_psy_out[ch]->sfb_count);
+    memset(pstr_qc_out_chan[ch]->quant_spec, 0,
+           sizeof(*pstr_qc_out_chan[ch]->quant_spec) * frame_len_long);
 
-    ptr_scalefactor = pstr_qc_out_chan[ch].scalefactor;
-    global_gain = &pstr_qc_out_chan[ch].global_gain;
+    ptr_scalefactor = pstr_qc_out_chan[ch]->scalefactor;
+    global_gain = &pstr_qc_out_chan[ch]->global_gain;
     ptr_sfb_form_factor = &sfb_form_factor_ch[ch][0];
     ptr_sfb_num_relevant_lines_ch = &sfb_num_relevant_lines_ch[ch][0];
-    ptr_quant_spec = pstr_qc_out_chan[ch].quant_spec;
+    ptr_quant_spec = pstr_qc_out_chan[ch]->quant_spec;
 
     for (i = 0; i < pstr_psy_out_chan->sfb_count; i++) {
       thresh = pstr_psy_out_chan->ptr_sfb_thr[i];
@@ -684,7 +684,7 @@ VOID iaace_estimate_scfs_chan(
         min_sf_max_quant[i] = (WORD16)floor(C1_SF + C2_SF * log(max_spec));
         scf_int = MAX(scf_int, min_sf_max_quant[i]);
         scf_int = MAX(scf_int, MIN_GAIN_INDEX_AAC);
-        scf_int = MIN(scf_int, (MAX_GAIN_INDEX_AAC - SCF_COUNT_LIMIT_AAC));
+        scf_int = MIN(scf_int, (MAX_GAIN_INDEX_AAC - SCF_COUNT_LIMIT_AAC - 1));
         for (j = 0; j < pstr_psy_out_chan->sfb_offsets[i + 1] - pstr_psy_out_chan->sfb_offsets[i];
              j++) {
           ptr_exp_spec[pstr_psy_out_chan->sfb_offsets[i] + j] = (FLOAT32)(
@@ -739,7 +739,7 @@ VOID iaace_estimate_scfs_chan(
       }
     }
 
-    for (i = 0; i < pstr_psy_out[ch].sfb_count; i++) {
+    for (i = 0; i < pstr_psy_out[ch]->sfb_count; i++) {
       if ((ptr_scalefactor[i] != MIN_SHRT_VAL) &&
           (min_scf + MAX_SCF_DELTA) < ptr_scalefactor[i]) {
         ptr_scalefactor[i] = min_scf + MAX_SCF_DELTA;
