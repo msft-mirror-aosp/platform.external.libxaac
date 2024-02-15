@@ -19,19 +19,19 @@
 */
 #include <string.h>
 #include "ixheaacd_sbr_common.h"
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops16.h"
-#include "ixheaacd_basic_ops40.h"
-#include "ixheaacd_basic_ops.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops16.h"
+#include "ixheaac_basic_ops40.h"
+#include "ixheaac_basic_ops.h"
 #include "ixheaacd_defines.h"
 #include "ixheaacd_error_codes.h"
 
 #include "ixheaacd_intrinsics.h"
-#include "ixheaacd_sbr_const.h"
-#include "ixheaacd_basic_op.h"
+#include "ixheaac_sbr_const.h"
+#include "ixheaac_basic_op.h"
 #include "ixheaacd_defines.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_pns.h"
@@ -392,9 +392,13 @@ IA_ERRORCODE ixheaacd_applysbr(
         ptr_header_data[k]->hbe_flag = 0;
         ptr_header_data[k]->pvc_flag = 0;
       }
-      ptr_header_data[k]->esbr_hq = self->esbr_hq;
-      if (!usac_flag &&
-          (!(audio_object_type == AOT_ER_AAC_ELD || audio_object_type == AOT_ER_AAC_LD))) {
+      if (self->enh_sbr)
+      {
+        ptr_header_data[k]->esbr_hq = self->esbr_hq;
+      }
+
+      if (!usac_flag && (!(audio_object_type == AOT_ER_AAC_ELD ||
+          audio_object_type == AOT_ER_AAC_LD)) && self->enh_sbr) {
         ptr_header_data[k]->hbe_flag = 1;
       }
     }
@@ -410,7 +414,7 @@ IA_ERRORCODE ixheaacd_applysbr(
       }
     }
 
-    if (audio_object_type == AOT_ER_AAC_ELD) {
+    if (audio_object_type == AOT_ER_AAC_ELD || (ps_enable && heaac_mps_present)) {
       low_pow_flag = 0;
     }
 
@@ -463,7 +467,8 @@ IA_ERRORCODE ixheaacd_applysbr(
 
       if (frame_status) {
         if (!usac_flag) {
-          if (!(audio_object_type == AOT_ER_AAC_LD || audio_object_type == AOT_ER_AAC_ELD)) {
+          if (!(audio_object_type == AOT_ER_AAC_LD || audio_object_type == AOT_ER_AAC_ELD)
+              && self->enh_sbr) {
             WORD8 tmp[1024];
             WORD32 tmp_payload;
             memcpy(&tmp[0], ptr_bit_str_ele->ptr_sbr_data, ptr_bit_str_ele->size_payload);
@@ -610,6 +615,7 @@ IA_ERRORCODE ixheaacd_applysbr(
         if (stereo) {
           frame_status = ixheaacd_sbr_read_cpe(ptr_header_data[0], ptr_frame_data, it_bit_buff,
                                                self->pstr_sbr_tables, audio_object_type);
+          if (usac_flag && (frame_status == 0)) return -1;
           if (frame_status < 0) return frame_status;
         } else {
           if (ps_enable) {
@@ -625,6 +631,7 @@ IA_ERRORCODE ixheaacd_applysbr(
             frame_status = ixheaacd_sbr_read_sce(
                 ptr_header_data[k], ptr_frame_data[k], self->pstr_ps_stereo_dec, it_bit_buff,
                 self->pstr_sbr_tables, audio_object_type, ec_flag);
+            if (usac_flag && (frame_status == 0)) return -1;
             if (frame_status < 0) return frame_status;
             if (ec_flag && self->pstr_ps_stereo_dec != NULL) {
               ixheaacd_copy_prev_ps_params(self->pstr_ps_stereo_dec, &self->str_ps_config_prev,
@@ -637,7 +644,9 @@ IA_ERRORCODE ixheaacd_applysbr(
             if (frame_status < 0) return frame_status;
           }
         }
-        if (audio_object_type != AOT_ER_AAC_ELD) {
+        ptr_header_data[k]->enh_sbr_ps =
+            ((self->enh_sbr_ps) | (ptr_header_data[0]->channel_mode == PS_STEREO));
+        if ((audio_object_type != AOT_ER_AAC_ELD) && (audio_object_type != AOT_USAC)) {
           WORD32 total_bits_read;
           total_bits_read = ixheaacd_no_bits_read(it_bit_buff);
           if (total_bits_read > (ptr_bit_str_ele->size_payload << 3) ||
@@ -686,7 +695,7 @@ IA_ERRORCODE ixheaacd_applysbr(
         ptr_frame_data[1]->coupling_mode = COUPLING_OFF;
       }
 
-      if (ptr_header_data[0]->sync_state == SBR_NOT_INITIALIZED && !ec_flag) {
+      if (ptr_header_data[0]->sync_state == SBR_NOT_INITIALIZED && (!ec_flag || init_flag)) {
         WORD32 lr1 = ps_enable ? 2 : num_channels;
         ixheaacd_prepare_upsamp(ptr_header_data, pstr_sbr_channel, lr1);
       }
@@ -715,7 +724,7 @@ IA_ERRORCODE ixheaacd_applysbr(
         ps_flag = 1;
         self->ps_present = ps_flag;
       }
-      if (ptr_header_data[0]->enh_sbr_ps) {
+      if (ptr_header_data[0]->enh_sbr_ps && self->enh_sbr) {
         ps_flag = 1;
         self->ps_present = ps_flag;
       }
@@ -797,7 +806,8 @@ IA_ERRORCODE ixheaacd_applysbr(
           pstr_sbr_channel[0]->str_sbr_dec.str_sbr_scale_fact.ov_hb_scale;
     }
     pstr_sbr_channel[0]->str_sbr_dec.time_sample_buf = self->time_sample_buf[0];
-    if (self->pstr_ps_stereo_dec != NULL && (ps_enable || self->enh_sbr_ps)) {
+    if (self->pstr_ps_stereo_dec != NULL &&
+        (ps_enable || self->enh_sbr_ps) && self->enh_sbr) {
       self->pstr_ps_stereo_dec->pp_qmf_buf_real[0] =
           pstr_sbr_channel[0]->str_sbr_dec.pp_qmf_buf_real;
       self->pstr_ps_stereo_dec->pp_qmf_buf_imag[0] =
@@ -874,16 +884,19 @@ IA_ERRORCODE ixheaacd_applysbr(
           ch_fac, self->ptr_pvc_data_str, 0, NULL, audio_object_type, ldmps_present, self,
           heaac_mps_present, ec_flag);
       if (err_code) return err_code;
-      if (!self->enh_sbr_ps) {
-        if ((ptr_header_data[0]->sync_state == SBR_ACTIVE) && !ptr_frame_data[0]->mps_sbr_flag &&
-            ch_fac != 2) {
-          ptr_header_data[0]->pstr_freq_band_data[0].qmf_sb_prev =
-              ptr_header_data[0]->pstr_freq_band_data->sub_band_start;
-        }
-      } else {
-        if (ptr_header_data[0]->sync_state == SBR_ACTIVE) {
-          ptr_header_data[0]->pstr_freq_band_data[0].qmf_sb_prev =
-              ptr_header_data[0]->pstr_freq_band_data->sub_band_start;
+      if (self->enh_sbr)
+      {
+        if (!self->enh_sbr_ps) {
+          if ((ptr_header_data[0]->sync_state == SBR_ACTIVE) && !ptr_frame_data[0]->mps_sbr_flag
+              && ch_fac != 2) {
+            ptr_header_data[0]->pstr_freq_band_data[0].qmf_sb_prev =
+                ptr_header_data[0]->pstr_freq_band_data->sub_band_start;
+          }
+        } else {
+          if (ptr_header_data[0]->sync_state == SBR_ACTIVE) {
+            ptr_header_data[0]->pstr_freq_band_data[0].qmf_sb_prev =
+                ptr_header_data[0]->pstr_freq_band_data->sub_band_start;
+          }
         }
       }
     } else {
@@ -899,16 +912,19 @@ IA_ERRORCODE ixheaacd_applysbr(
           pstr_drc_dec->str_drc_channel_data[0].drc_factors_sbr, audio_object_type, ldmps_present,
           self, heaac_mps_present, ec_flag);
       if (err_code) return err_code;
-      if (!self->enh_sbr_ps) {
-        if ((ptr_header_data[0]->sync_state == SBR_ACTIVE) && !ptr_frame_data[0]->mps_sbr_flag &&
-            num_channels != 2) {
-          ptr_header_data[0]->pstr_freq_band_data[0].qmf_sb_prev =
-              ptr_header_data[0]->pstr_freq_band_data->sub_band_start;
-        }
-      } else {
-        if (ptr_header_data[0]->sync_state == SBR_ACTIVE) {
-          ptr_header_data[0]->pstr_freq_band_data[0].qmf_sb_prev =
-              ptr_header_data[0]->pstr_freq_band_data->sub_band_start;
+      if (self->enh_sbr)
+      {
+        if (!self->enh_sbr_ps) {
+          if ((ptr_header_data[0]->sync_state == SBR_ACTIVE) && !ptr_frame_data[0]->mps_sbr_flag
+              && num_channels != 2) {
+            ptr_header_data[0]->pstr_freq_band_data[0].qmf_sb_prev =
+                ptr_header_data[0]->pstr_freq_band_data->sub_band_start;
+          }
+        } else {
+          if (ptr_header_data[0]->sync_state == SBR_ACTIVE) {
+            ptr_header_data[0]->pstr_freq_band_data[0].qmf_sb_prev =
+                ptr_header_data[0]->pstr_freq_band_data->sub_band_start;
+          }
         }
       }
     }
@@ -932,16 +948,19 @@ IA_ERRORCODE ixheaacd_applysbr(
               self->pstr_common_tables, ch_fac, self->ptr_pvc_data_str, 0, NULL,
               audio_object_type, ldmps_present, self, heaac_mps_present, ec_flag);
           if (err_code) return err_code;
-          if (!self->enh_sbr_ps) {
-            if ((ptr_header_data[1]->sync_state == SBR_ACTIVE) &&
-                !ptr_frame_data[0]->mps_sbr_flag) {
-              ptr_header_data[1]->pstr_freq_band_data[0].qmf_sb_prev =
-                  ptr_header_data[1]->pstr_freq_band_data->sub_band_start;
-            }
-          } else {
-            if (ptr_header_data[1]->sync_state == SBR_ACTIVE) {
-              ptr_header_data[1]->pstr_freq_band_data[0].qmf_sb_prev =
-                  ptr_header_data[1]->pstr_freq_band_data->sub_band_start;
+          if (self->enh_sbr)
+          {
+            if (!self->enh_sbr_ps) {
+              if ((ptr_header_data[1]->sync_state == SBR_ACTIVE) &&
+                  !ptr_frame_data[0]->mps_sbr_flag) {
+                ptr_header_data[1]->pstr_freq_band_data[0].qmf_sb_prev =
+                    ptr_header_data[1]->pstr_freq_band_data->sub_band_start;
+              }
+            } else {
+              if (ptr_header_data[1]->sync_state == SBR_ACTIVE) {
+                ptr_header_data[1]->pstr_freq_band_data[0].qmf_sb_prev =
+                    ptr_header_data[1]->pstr_freq_band_data->sub_band_start;
+              }
             }
           }
         } else {
@@ -954,16 +973,19 @@ IA_ERRORCODE ixheaacd_applysbr(
               pstr_drc_dec->str_drc_channel_data[1].drc_factors_sbr, audio_object_type,
               ldmps_present, self, heaac_mps_present, ec_flag);
           if (err_code) return err_code;
-          if (!self->enh_sbr_ps) {
-            if ((ptr_header_data[1]->sync_state == SBR_ACTIVE) &&
-                !ptr_frame_data[0]->mps_sbr_flag) {
-              ptr_header_data[1]->pstr_freq_band_data[0].qmf_sb_prev =
-                  ptr_header_data[1]->pstr_freq_band_data->sub_band_start;
-            }
-          } else {
-            if (ptr_header_data[1]->sync_state == SBR_ACTIVE) {
-              ptr_header_data[1]->pstr_freq_band_data[0].qmf_sb_prev =
-                  ptr_header_data[1]->pstr_freq_band_data->sub_band_start;
+          if (self->enh_sbr)
+          {
+            if (!self->enh_sbr_ps) {
+              if ((ptr_header_data[1]->sync_state == SBR_ACTIVE) &&
+                  !ptr_frame_data[0]->mps_sbr_flag) {
+                ptr_header_data[1]->pstr_freq_band_data[0].qmf_sb_prev =
+                    ptr_header_data[1]->pstr_freq_band_data->sub_band_start;
+              }
+            } else {
+              if (ptr_header_data[1]->sync_state == SBR_ACTIVE) {
+                ptr_header_data[1]->pstr_freq_band_data[0].qmf_sb_prev =
+                    ptr_header_data[1]->pstr_freq_band_data->sub_band_start;
+              }
             }
           }
         }
@@ -976,7 +998,7 @@ IA_ERRORCODE ixheaacd_applysbr(
         if (sub_d((WORD16)ptr_header_data[0]->channel_mode, PS_STEREO) == 0) {
           num_channels = 2;
         }
-        if (ptr_header_data[0]->enh_sbr_ps) {
+        if (ptr_header_data[0]->enh_sbr_ps && self->enh_sbr) {
           num_channels = 2;
         }
       }
@@ -984,7 +1006,8 @@ IA_ERRORCODE ixheaacd_applysbr(
     *codec_num_channels = num_channels;
     self->sbr_mode = ptr_frame_data[0]->sbr_mode;
 
-    if ((audio_object_type == AOT_ER_AAC_ELD) || (audio_object_type == AOT_ER_AAC_LD)) {
+    if ((audio_object_type == AOT_ER_AAC_ELD) || (audio_object_type == AOT_ER_AAC_LD) ||
+        !self->enh_sbr) {
       if (pstr_drc_dec != NULL) {
         WORD32 i, j;
         for (i = 0; i < *codec_num_channels; i++) {
@@ -1202,6 +1225,8 @@ IA_ERRORCODE ixheaacd_parse_sbr(ia_handle_sbr_dec_inst_struct self,
             if (frame_status < 0) return frame_status;
           }
         }
+        ptr_header_data[k]->enh_sbr_ps =
+            ((self->enh_sbr_ps) | (ptr_header_data[0]->channel_mode == PS_STEREO));
         {
           WORD32 total_bits_read;
           total_bits_read = ixheaacd_no_bits_read(it_bit_buff);

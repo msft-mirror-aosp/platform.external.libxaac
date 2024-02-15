@@ -19,18 +19,18 @@
 */
 #include <string.h>
 #include "ixheaacd_sbr_common.h"
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops16.h"
-#include "ixheaacd_basic_ops40.h"
-#include "ixheaacd_basic_ops.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops16.h"
+#include "ixheaac_basic_ops40.h"
+#include "ixheaac_basic_ops.h"
 #include "ixheaacd_defines.h"
 
 #include "ixheaacd_intrinsics.h"
-#include "ixheaacd_sbr_const.h"
-#include "ixheaacd_basic_op.h"
+#include "ixheaac_sbr_const.h"
+#include "ixheaac_basic_op.h"
 #include "ixheaacd_defines.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_pns.h"
@@ -403,6 +403,38 @@ VOID ixheaacd_set_sbr_persistent_buffers(VOID *sbr_persistent_mem_v,
         used_persistent += MAX_QMF_BUF_LEN * sizeof(FLOAT32);
       }
     }
+
+    for (i = 0; i < MAX_ENV_COLS; i++)
+    {
+      p_str_sbr_dec_inst->pstr_sbr_channel[0]->str_sbr_dec.p_arr_qmf_buf_real[i] =
+          (WORD32 *)((WORD8 *)sbr_persistent_mem_v + used_persistent);
+      memset(p_str_sbr_dec_inst->pstr_sbr_channel[0]->str_sbr_dec.p_arr_qmf_buf_real[i],
+          0, MAX_QMF_BUF_LEN * sizeof(WORD32));
+      used_persistent += MAX_QMF_BUF_LEN * sizeof(WORD32);
+
+      p_str_sbr_dec_inst->pstr_sbr_channel[0]->str_sbr_dec.p_arr_qmf_buf_imag[i] =
+          (WORD32 *)((WORD8 *)sbr_persistent_mem_v + used_persistent);
+      memset(p_str_sbr_dec_inst->pstr_sbr_channel[0]->str_sbr_dec.p_arr_qmf_buf_imag[i],
+          0, MAX_QMF_BUF_LEN * sizeof(WORD32));
+      used_persistent += MAX_QMF_BUF_LEN * sizeof(WORD32);
+    }
+
+    if (num_channel == 2) {
+      for (i = 0; i < MAX_ENV_COLS; i++)
+      {
+        p_str_sbr_dec_inst->pstr_sbr_channel[1]->str_sbr_dec.p_arr_qmf_buf_real[i] =
+            (WORD32 *)((WORD8 *)sbr_persistent_mem_v + used_persistent);
+        memset(p_str_sbr_dec_inst->pstr_sbr_channel[1]->str_sbr_dec.p_arr_qmf_buf_real[i],
+            0, MAX_QMF_BUF_LEN * sizeof(WORD32));
+        used_persistent += MAX_QMF_BUF_LEN * sizeof(WORD32);
+
+        p_str_sbr_dec_inst->pstr_sbr_channel[1]->str_sbr_dec.p_arr_qmf_buf_imag[i] =
+            (WORD32 *)((WORD8 *)sbr_persistent_mem_v + used_persistent);
+        memset(p_str_sbr_dec_inst->pstr_sbr_channel[1]->str_sbr_dec.p_arr_qmf_buf_imag[i],
+            0, MAX_QMF_BUF_LEN * sizeof(WORD32));
+        used_persistent += MAX_QMF_BUF_LEN * sizeof(WORD32);
+      }
+    }
   }
 
   *persistent_used = used_persistent;
@@ -437,10 +469,10 @@ static PLATFORM_INLINE VOID ixheaacd_init_headerdata(
 
     if (tmp < 0)
       ptr_header_data->num_time_slots =
-          ixheaacd_extract16l(samp_per_frame << (-tmp));
+          ixheaac_extract16l(samp_per_frame << (-tmp));
     else
       ptr_header_data->num_time_slots =
-          ixheaacd_extract16l(samp_per_frame >> tmp);
+          ixheaac_extract16l(samp_per_frame >> tmp);
   } else {
     ptr_header_data->time_step = 1;
 
@@ -910,7 +942,7 @@ VOID ixheaacd_create_psdec(ia_ps_dec_struct *ptr_ps_dec,
       2 * delay * (NUM_OF_QUAD_MIRROR_FILTER_ICC_CHNLS -
                    (NUM_OF_QUAD_MIRROR_FILTER_ALL_PASS_CHNLS + SMALL_DEL_STRT));
 
-  temp = ptr1 - initial_ptr;
+  temp = (WORD32)(ptr1 - initial_ptr);
   memset(ptr_ps_dec->delay_buf_qmf_ser_re_im, 0, temp * sizeof(WORD16));
 
   memset(ptr_ps_dec->delay_buf_idx_ser, 0, NUM_SER_AP_LINKS * sizeof(WORD16));

@@ -18,7 +18,7 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include <math.h>
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_interface.h"
 #include "ixheaacd_tns_usac.h"
@@ -38,10 +38,10 @@
 #include "ixheaacd_func_def.h"
 #include "ixheaacd_acelp_com.h"
 
-#include "ixheaacd_basic_op.h"
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops40.h"
+#include "ixheaac_basic_op.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops40.h"
 
 #define LSF_GAP 50.0f
 #define FREQ_MAX 6400.0f
@@ -60,7 +60,7 @@ VOID ixheaacd_lsf_weight_2st_flt(FLOAT32 *lsfq, FLOAT32 *w, WORD32 mode) {
   }
 
   for (i = 0; i < ORDER; i++) {
-    w[i] = (FLOAT32)(factor_table[mode] / (FREQ_DIV / sqrt(d[i] * d[i + 1])));
+    w[i] = (FLOAT32)((factor_table[mode] * sqrt(d[i] * d[i + 1])) / FREQ_DIV);
   }
 
   return;
