@@ -22,11 +22,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 #include "ixheaacd_interface.h"
 
+#include "ixheaacd_defines.h"
+#include "ixheaacd_aac_rom.h"
+
 #include "ixheaacd_bitbuffer.h"
-#include "ixheaacd_interface.h"
 
 #include "ixheaacd_tns_usac.h"
 #include "ixheaacd_cnst.h"
@@ -41,16 +43,24 @@
 #include "ixheaacd_drc_dec.h"
 #include "ixheaacd_sbrdecoder.h"
 #include "ixheaacd_mps_polyphase.h"
-#include "ixheaacd_sbr_const.h"
+#include "ixheaac_sbr_const.h"
+
+#include "ixheaacd_pulsedata.h"
+#include "ixheaacd_pns.h"
+#include "ixheaacd_lt_predict.h"
+#include "ixheaacd_ec_defines.h"
+#include "ixheaacd_ec_struct_def.h"
 #include "ixheaacd_main.h"
+#include "ixheaacd_channelinfo.h"
+#include "ixheaacd_ec.h"
 #include "ixheaacd_arith_dec.h"
 #include "ixheaacd_windows.h"
 
 #include "ixheaacd_vec_baisc_ops.h"
-#include "ixheaacd_constants.h"
+#include "ixheaac_constants.h"
 #include "ixheaacd_function_selector.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops40.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops40.h"
 
 #include "ixheaacd_func_def.h"
 
@@ -65,17 +75,18 @@ extern const WORD32 ixheaacd_pre_post_twid_sin_64[64];
 extern const WORD32 ixheaacd_pre_post_twid_cos_48[48];
 extern const WORD32 ixheaacd_pre_post_twid_sin_48[48];
 extern const FLOAT64 ixheaacd_power_10_table[28];
+extern const ia_usac_samp_rate_info ixheaacd_samp_rate_info[];
 
 #define ABS(A) ((A) < 0 ? (-A) : (A))
 
 static WORD32 ixheaacd_calc_max_spectralline(WORD32 *p_in_ibuffer, WORD32 n) {
   WORD32 k, shiftp, itemp = 0;
   for (k = 0; k < n; k++) {
-    if (ixheaacd_abs32_sat(p_in_ibuffer[k]) > itemp)
-      itemp = ixheaacd_abs32_sat(p_in_ibuffer[k]);
+    if (ixheaac_abs32_sat(p_in_ibuffer[k]) > itemp)
+      itemp = ixheaac_abs32_sat(p_in_ibuffer[k]);
   }
 
-  shiftp = ixheaacd_norm32(itemp);
+  shiftp = ixheaac_norm32(itemp);
 
   return (shiftp);
 }
@@ -106,10 +117,10 @@ void ixheaacd_calc_pre_twid_dec(WORD32 *ptr_x, WORD32 *r_ptr, WORD32 *i_ptr,
   ptr_y = &ptr_x[2 * nlength - 1];
 
   for (i = 0; i < nlength; i++) {
-    *r_ptr++ = ((ixheaacd_mult32(ixheaacd_negate32_sat(*ptr_x), (*cos_ptr)) -
-                 ixheaacd_mult32((*ptr_y), (*sin_ptr))));
-    *i_ptr++ = ((ixheaacd_mult32((*ptr_y), (*cos_ptr++)) -
-                 ixheaacd_mult32((*ptr_x), (*sin_ptr++))));
+    *r_ptr++ = ((ixheaac_mult32(ixheaac_negate32_sat(*ptr_x), (*cos_ptr)) -
+                 ixheaac_mult32((*ptr_y), (*sin_ptr))));
+    *i_ptr++ = ((ixheaac_mult32((*ptr_y), (*cos_ptr++)) -
+                 ixheaac_mult32((*ptr_x), (*sin_ptr++))));
     ptr_x += 2;
     ptr_y -= 2;
   }
@@ -126,21 +137,20 @@ void ixheaacd_calc_post_twid_dec(WORD32 *xptr, WORD32 *r_ptr, WORD32 *i_ptr,
   yptr = &xptr[2 * nlength - 1];
 
   for (i = 0; i < nlength; i++) {
-    *xptr = (-(ixheaacd_mult32((r_ptr[i]), (*cos_ptr)) -
-               ixheaacd_mult32((i_ptr[i]), (*sin_ptr))));
-    *yptr = (-(ixheaacd_mult32((i_ptr[i]), (*cos_ptr++)) +
-               ixheaacd_mult32((r_ptr[i]), (*sin_ptr++))));
+    *xptr = (-(ixheaac_mult32((r_ptr[i]), (*cos_ptr)) -
+               ixheaac_mult32((i_ptr[i]), (*sin_ptr))));
+    *yptr = (-(ixheaac_mult32((i_ptr[i]), (*cos_ptr++)) +
+               ixheaac_mult32((r_ptr[i]), (*sin_ptr++))));
     xptr += 2;
     yptr -= 2;
   }
 }
 
-static WORD32 ixheaacd_fft_based_imdct(WORD32 *data, WORD32 npoints,
-                                       WORD32 *preshift, WORD32 *tmp_data) {
+static VOID ixheaacd_fft_based_imdct(WORD32 *data, WORD32 npoints, WORD32 *preshift,
+                                     WORD32 *tmp_data) {
   WORD32 *data_r;
   WORD32 *data_i;
   WORD32 nlength = npoints >> 1;
-  WORD32 err = 0;
   const WORD32 *cos_ptr;
   const WORD32 *sin_ptr;
 
@@ -165,20 +175,19 @@ static WORD32 ixheaacd_fft_based_imdct(WORD32 *data, WORD32 npoints,
   }
 
   (*ixheaacd_calc_pre_twid)(data, data_r, data_i, nlength, cos_ptr, sin_ptr);
-  err = ixheaacd_complex_fft(data_r, data_i, nlength, 1, preshift);
-  if (err) return err;
+  ixheaacd_complex_fft(data_r, data_i, nlength, 1, preshift);
+
   (*ixheaacd_calc_post_twid)(data, data_r, data_i, nlength, cos_ptr, sin_ptr);
-  return err;
+  return;
 }
 
 #define N_LONG_LEN_MAX 1024
 
-WORD32 ixheaacd_acelp_imdct(WORD32 *imdct_in, WORD32 npoints, WORD8 *qshift,
+VOID ixheaacd_acelp_imdct(WORD32 *imdct_in, WORD32 npoints, WORD8 *qshift,
                             WORD32 *tmp_data) {
   WORD32 preshift = 0;
   WORD32 i;
   WORD32 k = (npoints / 2);
-  WORD32 err = 0;
 
   while (((k & 1) == 0) & (k != 1)) {
     k = k >> 1;
@@ -192,11 +201,10 @@ WORD32 ixheaacd_acelp_imdct(WORD32 *imdct_in, WORD32 npoints, WORD8 *qshift,
     preshift++;
   }
 
-  err = ixheaacd_fft_based_imdct(imdct_in, npoints / 2, &preshift, tmp_data);
-  if (err) return err;
+  ixheaacd_fft_based_imdct(imdct_in, npoints / 2, &preshift, tmp_data);
   preshift += 2;
   *qshift -= preshift;
-  return err;
+  return;
 }
 
 IA_ERRORCODE ixheaacd_cal_fac_data(ia_usac_data_struct *usac_data, WORD32 i_ch,
@@ -212,7 +220,6 @@ IA_ERRORCODE ixheaacd_cal_fac_data(ia_usac_data_struct *usac_data, WORD32 i_ch,
   WORD8 qshift2 = 0;
   WORD8 qshift3 = 0;
   WORD32 preshift = 0;
-  IA_ERRORCODE err = IA_NO_ERROR;
 
   FLOAT32 *last_lpc = usac_data->lpc_prev[i_ch];
   FLOAT32 *acelp_in = usac_data->acelp_in[i_ch];
@@ -225,7 +232,7 @@ IA_ERRORCODE ixheaacd_cal_fac_data(ia_usac_data_struct *usac_data, WORD32 i_ch,
   rem10 = (FLOAT32)ixheaacd_power_10_table[rem];
 
   gain = pow10 * rem10;
-  scale = (WORD32)(ixheaacd_norm32((WORD32)((ABS(gain) + 1))));
+  scale = (WORD32)(ixheaac_norm32((WORD32)((ABS(gain) + 1))));
   gain_fac = (WORD32)(gain * (FLOAT32)((WORD64)1 << scale));
   scale += 4;
   qfac1 = 1.0f / (gain);
@@ -239,7 +246,7 @@ IA_ERRORCODE ixheaacd_cal_fac_data(ia_usac_data_struct *usac_data, WORD32 i_ch,
     }
 
     itemp = (WORD32)(ftemp);
-    qshift3 = ixheaacd_norm32(itemp);
+    qshift3 = ixheaac_norm32(itemp);
 
     for (k = 0; k < n_long / 4; k++) {
       izir[k] =
@@ -256,7 +263,7 @@ IA_ERRORCODE ixheaacd_cal_fac_data(ia_usac_data_struct *usac_data, WORD32 i_ch,
     }
 
     itemp = (WORD32)(ftemp);
-    qshift2 = ixheaacd_norm32(itemp);
+    qshift2 = ixheaac_norm32(itemp);
 
     for (k = 0; k < ORDER + 1; k++) {
       i_aq[k] = (WORD32)(last_lpc[k] * (FLOAT32)((WORD64)1 << qshift2));
@@ -265,11 +272,11 @@ IA_ERRORCODE ixheaacd_cal_fac_data(ia_usac_data_struct *usac_data, WORD32 i_ch,
     i_aq = NULL;
 
   for (k = 0; k < lfac; k++) {
-    if (ixheaacd_abs32_sat(fac_data[k + 1]) > itemp)
-      itemp = ixheaacd_abs32_sat(fac_data[k + 1]);
+    if (ixheaac_abs32_sat(fac_data[k + 1]) > itemp)
+      itemp = ixheaac_abs32_sat(fac_data[k + 1]);
   }
 
-  qshift1 = ixheaacd_norm32(itemp);
+  qshift1 = ixheaac_norm32(itemp);
 
   for (k = 0; k < lfac; k++) {
     fac_data[k + 1] =
@@ -281,17 +288,46 @@ IA_ERRORCODE ixheaacd_cal_fac_data(ia_usac_data_struct *usac_data, WORD32 i_ch,
     x_in[lfac / 2 + k] = fac_data[lfac - 2 * k];
   }
 
-  err = ixheaacd_fr_alias_cnx_fix(x_in, n_long / 4, lfac, i_aq, izir,
-                                  fac_idata + 16, &qshift1, qshift2, qshift3,
-                                  &preshift, ptr_scratch);
-  if (err) return err;
+  if (FAC_LENGTH < lfac) {
+    if (usac_data->ec_flag == 0)
+      return -1;
+    else
+      lfac = FAC_LENGTH;
+  }
+
+  if ((n_long / 8) < lfac) {
+    if (usac_data->ec_flag == 0)
+      return -1;
+    else
+      lfac = (n_long / 8);
+  }
+
+  if ((n_long / 8 + 1) > (2 * LEN_FRAME - lfac - 1)) {
+    if (usac_data->ec_flag == 0)
+      return -1;
+    else
+      lfac = (2 * LEN_FRAME) - (n_long / 8);
+  }
+
+  if (lfac & (lfac - 1)) {
+    if ((lfac != 48) && (lfac != 96) && (lfac != 192) && (lfac != 384) && (lfac != 768)) {
+      if (usac_data->ec_flag == 0)
+        return -1;
+      else
+        lfac = 48;
+    }
+  }
+
+  ixheaacd_fr_alias_cnx_fix(x_in, n_long / 4, lfac, i_aq, izir, fac_idata + 16, &qshift1, qshift2,
+                            qshift3, &preshift, ptr_scratch);
+
   preshift += 4;
   *q_fac = (qshift1 - preshift);
 
   if (acelp_in != NULL) {
     for (k = 0; k < 2 * lfac; k++) {
       fac_idata[k] =
-          ixheaacd_mul32_sh(fac_idata[k + 16], gain_fac, (WORD8)(scale));
+          ixheaac_mul32_sh(fac_idata[k + 16], gain_fac, (WORD8)(scale));
     }
   }
   return IA_NO_ERROR;
@@ -321,8 +357,19 @@ static IA_ERRORCODE ixheaacd_fd_imdct_short(ia_usac_data_struct *usac_data,
   ia_usac_lpd_decoder_handle st = usac_data->str_tddec[i_ch];
   WORD32 err_code = 0;
 
-  max_shift =
-      ixheaacd_calc_max_spectralline(p_in_ibuffer, ixheaacd_drc_offset->n_long);
+  if (usac_data->ec_flag) {
+    td_frame_prev = usac_data->td_frame_prev_ec[i_ch];
+  } else {
+    if (ixheaacd_drc_offset->n_short & (ixheaacd_drc_offset->n_short - 1)) {
+      if ((ixheaacd_drc_offset->n_short != 48) && (ixheaacd_drc_offset->n_short != 96) &&
+          (ixheaacd_drc_offset->n_short != 192) && (ixheaacd_drc_offset->n_short != 384) &&
+          (ixheaacd_drc_offset->n_short != 768)) {
+        return -1;
+      }
+    }
+  }
+
+  max_shift = ixheaacd_calc_max_spectralline(p_in_ibuffer, ixheaacd_drc_offset->n_long);
   ixheaacd_normalize(p_in_ibuffer, max_shift, ixheaacd_drc_offset->n_long);
   shiftp = max_shift + 6;
   input_q = shiftp;
@@ -335,10 +382,9 @@ static IA_ERRORCODE ixheaacd_fd_imdct_short(ia_usac_data_struct *usac_data,
 
   for (k = 0; k < 8; k++) {
     shiftp = input_q;
-    err_code = ixheaacd_acelp_imdct(
+    ixheaacd_acelp_imdct(
         p_in_ibuffer + (k * ixheaacd_drc_offset->n_short),
         2 * ixheaacd_drc_offset->n_short, &shiftp, scratch_mem);
-    if (err_code) return err_code;
   }
 
   max_shift =
@@ -346,12 +392,14 @@ static IA_ERRORCODE ixheaacd_fd_imdct_short(ia_usac_data_struct *usac_data,
   ixheaacd_normalize(p_in_ibuffer, max_shift - 1, ixheaacd_drc_offset->n_long);
   shiftp += max_shift - 1;
 
+  if ((shiftp - shift_olap) > 31) {
+    shiftp = 31 + shift_olap;
+  }
   err_code = ixheaacd_calc_window(&window_short, ixheaacd_drc_offset->n_short,
-                                  window_select);
+                                  window_select, usac_data->ec_flag);
   if (err_code == -1) return err_code;
-  err_code =
-      ixheaacd_calc_window(&window_short_prev_ptr,
-                           ixheaacd_drc_offset->n_trans_ls, window_select_prev);
+  err_code = ixheaacd_calc_window(&window_short_prev_ptr, ixheaacd_drc_offset->n_trans_ls,
+                                  window_select_prev, usac_data->ec_flag);
   if (err_code == -1) return err_code;
 
   if (fac_apply)
@@ -431,7 +479,7 @@ static IA_ERRORCODE ixheaacd_fd_imdct_long(ia_usac_data_struct *usac_data,
                                            offset_lengths *ixheaacd_drc_offset,
                                            WORD8 fac_q) {
   FLOAT32 qfac;
-  WORD32 *window_long_prev, k, i, *window_short_prev_ptr;
+  WORD32 *window_long_prev = NULL, k, i, *window_short_prev_ptr = NULL;
 
   WORD32 *p_in_ibuffer = usac_data->coef_fix[i_ch];
   WORD32 *p_overlap_ibuffer = usac_data->overlap_data_ptr[i_ch];
@@ -449,26 +497,39 @@ static IA_ERRORCODE ixheaacd_fd_imdct_long(ia_usac_data_struct *usac_data,
   ia_usac_lpd_decoder_handle st = usac_data->str_tddec[i_ch];
 
   WORD32 err_code = 0;
+  if (usac_data->ec_flag) {
+    td_frame_prev = usac_data->td_frame_prev_ec[i_ch];
+  } else {
+    if (ixheaacd_drc_offset->n_long & (ixheaacd_drc_offset->n_long - 1)) {
+      if ((ixheaacd_drc_offset->n_long != 48) && (ixheaacd_drc_offset->n_long != 96) &&
+          (ixheaacd_drc_offset->n_long != 192) && (ixheaacd_drc_offset->n_long != 384) &&
+          (ixheaacd_drc_offset->n_long != 768)) {
+        return -1;
+      }
+    }
+  }
 
   max_shift =
       ixheaacd_calc_max_spectralline(p_in_ibuffer, ixheaacd_drc_offset->n_long);
   ixheaacd_normalize(p_in_ibuffer, max_shift, ixheaacd_drc_offset->n_long);
   shiftp = max_shift + 6;
 
-  err_code = ixheaacd_acelp_imdct(p_in_ibuffer, 2 * ixheaacd_drc_offset->n_long,
+  ixheaacd_acelp_imdct(p_in_ibuffer, 2 * ixheaacd_drc_offset->n_long,
                                   &shiftp, scratch_mem);
-  if (err_code) return err_code;
 
   max_shift =
       ixheaacd_calc_max_spectralline(p_in_ibuffer, ixheaacd_drc_offset->n_long);
   ixheaacd_normalize(p_in_ibuffer, max_shift - 1, ixheaacd_drc_offset->n_long);
   shiftp += max_shift - 1;
+  if ((shiftp - shift_olap) > 31) {
+    shiftp = 31 + shift_olap;
+  }
 
   switch (window_sequence) {
     case ONLY_LONG_SEQUENCE:
     case LONG_START_SEQUENCE:
       err_code = ixheaacd_calc_window(
-          &window_long_prev, ixheaacd_drc_offset->n_long, window_select_prev);
+          &window_long_prev, ixheaacd_drc_offset->n_long, window_select_prev, usac_data->ec_flag);
       if (err_code == -1) return err_code;
       output_q = ixheaacd_windowing_long1(
           p_in_ibuffer + n_long / 2, p_overlap_ibuffer, window_long_prev,
@@ -480,7 +541,7 @@ static IA_ERRORCODE ixheaacd_fd_imdct_long(ia_usac_data_struct *usac_data,
     case LONG_STOP_SEQUENCE:
       err_code = ixheaacd_calc_window(&window_short_prev_ptr,
                                       ixheaacd_drc_offset->n_trans_ls,
-                                      window_select_prev);
+                                      window_select_prev, usac_data->ec_flag);
       if (err_code == -1) return err_code;
       if (fac_apply) {
         output_q = ixheaacd_windowing_long2(
@@ -498,10 +559,18 @@ static IA_ERRORCODE ixheaacd_fd_imdct_long(ia_usac_data_struct *usac_data,
   }
 
   for (i = 0; i < ixheaacd_drc_offset->n_long / 2; i++) {
-    p_overlap_ibuffer[ixheaacd_drc_offset->n_long / 2 + i] =
-        ixheaacd_negate32_sat(p_in_ibuffer[i]) >> (shiftp - shift_olap);
-    p_overlap_ibuffer[ixheaacd_drc_offset->n_long / 2 - i - 1] =
-        ixheaacd_negate32_sat(p_in_ibuffer[i]) >> (shiftp - shift_olap);
+    if (shiftp > shift_olap) {
+      p_overlap_ibuffer[ixheaacd_drc_offset->n_long / 2 + i] =
+        ixheaac_negate32_sat(p_in_ibuffer[i]) >> (shiftp - shift_olap);
+      p_overlap_ibuffer[ixheaacd_drc_offset->n_long / 2 - i - 1] =
+        ixheaac_negate32_sat(p_in_ibuffer[i]) >> (shiftp - shift_olap);
+    }
+    else {
+      p_overlap_ibuffer[ixheaacd_drc_offset->n_long / 2 + i] =
+        ixheaac_negate32_sat(p_in_ibuffer[i]) >> (shift_olap - shiftp);
+      p_overlap_ibuffer[ixheaacd_drc_offset->n_long / 2 - i - 1] =
+        ixheaac_negate32_sat(p_in_ibuffer[i]) >> (shift_olap - shiftp);
+    }
   }
 
   ixheaacd_scale_down_adj(p_out_ibuffer, p_out_ibuffer,
@@ -528,10 +597,21 @@ WORD32 ixheaacd_fd_frm_dec(ia_usac_data_struct *usac_data, WORD32 i_ch) {
   WORD32 fac_idata[2 * FAC_LENGTH + 16];
   offset_lengths ixheaacd_drc_offset;
   WORD8 fac_q = 0;
-  WORD32 td_frame_prev = usac_data->td_frame_prev[i_ch];
-  WORD32 fac_apply = usac_data->fac_data_present[i_ch];
-  WORD32 window_sequence = usac_data->window_sequence[i_ch];
   IA_ERRORCODE err = IA_NO_ERROR;
+  WORD32 td_frame_prev, fac_apply, window_sequence;
+  if (usac_data->ec_flag) {
+    usac_data->str_error_concealment[i_ch].pstr_ec_scratch =
+        (ia_ec_scratch_str *)&usac_data->str_error_concealment[i_ch].str_ec_scratch;
+    usac_data->core_mode = 0;
+    ixheaacd_usac_apply_ec(usac_data, &ixheaacd_samp_rate_info[0], i_ch);
+  }
+  if (usac_data->ec_flag) {
+    td_frame_prev = usac_data->td_frame_prev_ec[i_ch];
+  } else {
+    td_frame_prev = usac_data->td_frame_prev[i_ch];
+  }
+  fac_apply = usac_data->fac_data_present[i_ch];
+  window_sequence = usac_data->window_sequence[i_ch];
   ixheaacd_drc_offset.n_long = usac_data->ccfl;
   ixheaacd_drc_offset.n_short = ixheaacd_drc_offset.n_long >> 3;
 
@@ -554,7 +634,7 @@ WORD32 ixheaacd_fd_frm_dec(ia_usac_data_struct *usac_data, WORD32 i_ch) {
     ixheaacd_drc_offset.n_trans_ls = ixheaacd_drc_offset.n_short;
   }
 
-  if (fac_apply) {
+  if (fac_apply && usac_data->frame_ok == 1) {
     err = ixheaacd_cal_fac_data(usac_data, i_ch, ixheaacd_drc_offset.n_long,
                                 ixheaacd_drc_offset.lfac, fac_idata, &fac_q);
     if (err) return err;

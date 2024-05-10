@@ -19,14 +19,14 @@
 */
 #include <string.h>
 
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 #include "ixheaacd_sbr_common.h"
 
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops16.h"
-#include "ixheaacd_basic_ops40.h"
-#include "ixheaacd_basic_ops.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops16.h"
+#include "ixheaac_basic_ops40.h"
+#include "ixheaac_basic_ops.h"
 
 #include "ixheaacd_bitbuffer.h"
 
@@ -43,6 +43,9 @@
 #include "ixheaacd_drc_data_struct.h"
 
 #include "ixheaacd_lt_predict.h"
+#include "ixheaacd_cnst.h"
+#include "ixheaacd_ec_defines.h"
+#include "ixheaacd_ec_struct_def.h"
 #include "ixheaacd_channelinfo.h"
 #include "ixheaacd_drc_dec.h"
 
@@ -72,12 +75,17 @@
 #include "ixheaacd_ps_dec.h"
 #include "ixheaacd_qmf_dec.h"
 #include "ixheaacd_mps_polyphase.h"
+#include "ixheaacd_mps_macro_def.h"
+#include "ixheaacd_mps_struct_def.h"
+#include "ixheaacd_mps_res_rom.h"
+#include "ixheaacd_mps_aac_struct.h"
 #include "ixheaacd_mps_dec.h"
+#include "ixheaacd_mps_interface.h"
 #include "ixheaacd_struct_def.h"
 #include "ixheaacd_headerdecode.h"
 
 #include "ixheaacd_multichannel.h"
-#include "ixheaacd_basic_op.h"
+#include "ixheaac_basic_op.h"
 
 WORD cblock_decode_huff_symbol(UWORD8 *ptr_read_next, WORD32 bit_pos,
                                const UWORD16 *huff_ori, WORD16 *input,
@@ -133,7 +141,7 @@ WORD cblock_decode_huff_symbol(UWORD8 *ptr_read_next, WORD32 bit_pos,
 }
 
 IA_ERRORCODE ixheaacd_dec_coupling_channel_element(
-    ia_handle_bit_buf_struct bs, ia_aac_decoder_struct *aac_handle,
+    ia_bit_buf_struct *it_bit_buf, ia_aac_decoder_struct *aac_handle,
     WORD32 samp_rate_idx, ia_aac_dec_tables_struct *ptr_aac_tables,
     ixheaacd_misc_tables *common_tables_ptr, WORD *element_index_order,
     ia_enhaacplus_dec_ind_cc *ind_channel_info, WORD32 total_channels,
@@ -155,11 +163,11 @@ IA_ERRORCODE ixheaacd_dec_coupling_channel_element(
 
   IA_ERRORCODE error_status = IA_NO_ERROR;
 
-  element_instance_tag = ixheaacd_read_bits_buf(bs, 4);
+  element_instance_tag = ixheaacd_read_bits_buf(it_bit_buf, 4);
   element_index_order[0] = element_instance_tag;
 
-  ind_sw_cce_flag = ixheaacd_read_bits_buf(bs, 1);
-  num_coupled_elements = ixheaacd_read_bits_buf(bs, 3);
+  ind_sw_cce_flag = ixheaacd_read_bits_buf(it_bit_buf, 1);
+  num_coupled_elements = ixheaacd_read_bits_buf(it_bit_buf, 3);
 
   for (c = 0; c < MAX_BS_ELEMENT; c++)
     ind_channel_info->elements_coupled[c] = -1;
@@ -169,11 +177,11 @@ IA_ERRORCODE ixheaacd_dec_coupling_channel_element(
   for (c = 0; c < (num_coupled_elements + 1); c++) {
     num_gain_element_lists++;
 
-    ind_channel_info->cc_target_is_cpe[c] = ixheaacd_read_bits_buf(bs, 1);
-    ind_channel_info->cc_target_tag_select[c] = ixheaacd_read_bits_buf(bs, 4);
+    ind_channel_info->cc_target_is_cpe[c] = ixheaacd_read_bits_buf(it_bit_buf, 1);
+    ind_channel_info->cc_target_tag_select[c] = ixheaacd_read_bits_buf(it_bit_buf, 4);
     if (ind_channel_info->cc_target_is_cpe[c]) {
-      ind_channel_info->cc_l[c] = ixheaacd_read_bits_buf(bs, 1);
-      ind_channel_info->cc_r[c] = ixheaacd_read_bits_buf(bs, 1);
+      ind_channel_info->cc_l[c] = ixheaacd_read_bits_buf(it_bit_buf, 1);
+      ind_channel_info->cc_r[c] = ixheaacd_read_bits_buf(it_bit_buf, 1);
       if (ind_channel_info->cc_l[c] && ind_channel_info->cc_r[c])
         num_gain_element_lists++;
       ind_channel_info->elements_coupled[c] = 1;
@@ -183,9 +191,9 @@ IA_ERRORCODE ixheaacd_dec_coupling_channel_element(
   if ((ind_sw_cce_flag == 0) && (num_gain_element_lists > MAX_BS_ELEMENT)) {
     return IA_FATAL_ERROR;
   }
-  ixheaacd_read_bits_buf(bs, 1);/*cc_domain*/
-  ixheaacd_read_bits_buf(bs, 1);/*gain_element_sign*/
-  gain_element_scale = ixheaacd_read_bits_buf(bs, 2);
+  ixheaacd_read_bits_buf(it_bit_buf, 1);/*cc_domain*/
+  ixheaacd_read_bits_buf(it_bit_buf, 1);/*gain_element_sign*/
+  gain_element_scale = ixheaacd_read_bits_buf(it_bit_buf, 2);
 
   aac_handle->pstr_aac_dec_ch_info[0]->str_ics_info.num_swb_window = 0;
   aac_handle->pstr_aac_dec_ch_info[0]->str_ics_info.sampling_rate_index =
@@ -194,7 +202,7 @@ IA_ERRORCODE ixheaacd_dec_coupling_channel_element(
   aac_handle->pstr_aac_dec_ch_info[0]->common_window = 0;
 
   error_status = ixheaacd_individual_ch_stream(
-      bs, aac_handle, 1, frame_size, total_channels, audio_object_type,
+      it_bit_buf, aac_handle, 1, frame_size, total_channels, audio_object_type,
       eld_specific_config, ele_type);
 
   if (error_status) return error_status;
@@ -208,15 +216,15 @@ IA_ERRORCODE ixheaacd_dec_coupling_channel_element(
     if (ind_sw_cce_flag)
       cge = 1;
     else {
-      common_gain_element_present[c] = ixheaacd_read_bits_buf(bs, 1);
+      common_gain_element_present[c] = ixheaacd_read_bits_buf(it_bit_buf, 1);
       cge = common_gain_element_present[c];
-      return IA_ENHAACPLUS_DEC_EXE_FATAL_UNIMPLEMENTED_CCE;
+      return IA_XHEAAC_DEC_EXE_FATAL_UNIMPLEMENTED_CCE;
     }
     if (cge) {
-      UWORD8 *ptr_read_next = bs->ptr_read_next;
-      WORD32 bit_pos = 7 - bs->bit_pos;
+      UWORD8 *ptr_read_next = it_bit_buf->ptr_read_next;
+      WORD32 bit_pos = 7 - it_bit_buf->bit_pos;
       WORD32 read_word =
-          ixheaacd_aac_showbits_32(bs->ptr_read_next, bs->cnt_bits, NULL);
+          ixheaacd_aac_showbits_32(it_bit_buf->ptr_read_next, it_bit_buf->cnt_bits, NULL);
       UWORD32 read_word1;
 
       read_word1 = read_word << bit_pos;
@@ -228,9 +236,9 @@ IA_ERRORCODE ixheaacd_dec_coupling_channel_element(
       while (bit_pos > 8)
         ixheaacd_aac_read_byte(&ptr_read_next, &bit_pos, &read_word);
 
-      bs->ptr_read_next = ptr_read_next;
-      bs->bit_pos = 7 - bit_pos;
-      bs->cnt_bits -= length;
+      it_bit_buf->ptr_read_next = ptr_read_next;
+      it_bit_buf->bit_pos = 7 - bit_pos;
+      it_bit_buf->cnt_bits -= length;
 
       norm_value = index - 60;
       if (norm_value == -1)
@@ -241,17 +249,17 @@ IA_ERRORCODE ixheaacd_dec_coupling_channel_element(
         ind_channel_info->cc_gain[c] =
             common_tables_ptr->cc_gain_scale[gain_element_scale];
         for (i = 0; i < (-norm_value) - 1; i++) {
-          ind_channel_info->cc_gain[c] = ixheaacd_mul32_sh(
+          ind_channel_info->cc_gain[c] = ixheaac_mul32_sh(
               ind_channel_info->cc_gain[c],
               common_tables_ptr->cc_gain_scale[gain_element_scale], 29);
         }
       }
     } else {
-      return IA_ENHAACPLUS_DEC_EXE_FATAL_UNIMPLEMENTED_CCE;
+      return IA_XHEAAC_DEC_EXE_FATAL_UNIMPLEMENTED_CCE;
     }
   }
-  if (bs->cnt_bits < 0) {
-    return IA_ENHAACPLUS_DEC_EXE_NONFATAL_INSUFFICIENT_INPUT_BYTES;
+  if (it_bit_buf->cnt_bits < 0) {
+    return IA_XHEAAC_DEC_EXE_NONFATAL_INSUFFICIENT_INPUT_BYTES;
   }
   return error_status;
 }
@@ -265,21 +273,21 @@ void ixheaacd_dec_couple_channel(WORD32 *p_time_data, WORD32 *out_samp_cc,
   WORD32 out_cc;
   WORD32 *ptr_out_samp = &out_samp_cc[0];
   for (i = frame_size - 1; i >= 0; i--) {
-    out_cc = (ixheaacd_shl32_sat(
-        ixheaacd_mult32x16in32(*ptr_out_samp++, gain_cc), 3));
-    *p_time_data = ixheaacd_add32_sat(out_cc, *p_time_data);
+    out_cc = (ixheaac_shl32_sat(
+        ixheaac_mult32x16in32(*ptr_out_samp++, gain_cc), 3));
+    *p_time_data = ixheaac_add32_sat(out_cc, *p_time_data);
     p_time_data += total_channels;
   }
 }
 
-void ixheaacd_dec_ind_coupling(
+IA_ERRORCODE ixheaacd_dec_ind_coupling(
     ia_exhaacplus_dec_api_struct *p_obj_exhaacplus_dec, WORD32 *coup_ch_output,
     WORD16 frame_size, WORD total_channels, VOID *ptr_time_data_tmp)
 
 {
   WORD c, j, k;
   WORD l;
-  WORD32 *out_samp_cc;
+  WORD32 *out_samp_cc, err = 0;
 
   ia_enhaacplus_dec_ind_cc *ind_channel_info;
 
@@ -289,6 +297,15 @@ void ixheaacd_dec_ind_coupling(
     ind_channel_info = &p_obj_exhaacplus_dec->p_state_aac->ind_cc_info;
 
     out_samp_cc = coup_ch_output;
+
+    if (ind_channel_info->num_coupled_elements > 0 && coup_ch_output == NULL) {
+      if (p_obj_exhaacplus_dec->p_state_aac->ec_enable) {
+        ind_channel_info->num_coupled_elements = 0;
+        p_obj_exhaacplus_dec->aac_config.frame_status = 0;
+      } else {
+        return IA_FATAL_ERROR;
+      }
+    }
 
     j = 0;
     for (c = 0; c < ind_channel_info->num_coupled_elements + 1; c++) {
@@ -309,7 +326,7 @@ void ixheaacd_dec_ind_coupling(
       if (ind_channel_info->cc_target_is_cpe[c] == 0) {
         WORD32 *p_time_data = &ptr_time_data[k];
 
-        WORD16 gain_cc = ixheaacd_round16(ind_channel_info->cc_gain[j]);
+        WORD16 gain_cc = ixheaac_round16(ind_channel_info->cc_gain[j]);
 
         ixheaacd_dec_couple_channel(p_time_data, out_samp_cc, frame_size,
                                     total_channels, gain_cc);
@@ -318,7 +335,7 @@ void ixheaacd_dec_ind_coupling(
         if (ind_channel_info->cc_l[c] == 1) {
           WORD32 *p_time_data = &ptr_time_data[k];
 
-          WORD16 gain_cc = ixheaacd_round16(ind_channel_info->cc_gain[j]);
+          WORD16 gain_cc = ixheaac_round16(ind_channel_info->cc_gain[j]);
 
           ixheaacd_dec_couple_channel(p_time_data, out_samp_cc, frame_size,
                                       total_channels, gain_cc);
@@ -328,7 +345,7 @@ void ixheaacd_dec_ind_coupling(
 
         if (ind_channel_info->cc_r[c] == 1) {
           WORD32 *p_time_data = &ptr_time_data[k + 1];
-          WORD16 gain_cc = ixheaacd_round16(ind_channel_info->cc_gain[j + 1]);
+          WORD16 gain_cc = ixheaac_round16(ind_channel_info->cc_gain[j + 1]);
 
           ixheaacd_dec_couple_channel(p_time_data, out_samp_cc, frame_size,
                                       total_channels, gain_cc);
@@ -341,6 +358,7 @@ void ixheaacd_dec_ind_coupling(
       }
     }
   }
+  return err;
 }
 
 void ixheaacd_dec_downmix_to_stereo(
@@ -359,7 +377,7 @@ void ixheaacd_dec_downmix_to_stereo(
       if (0 == p_obj_exhaacplus_dec->aac_config.element_type[i] ||
           3 == p_obj_exhaacplus_dec->aac_config.element_type[i]) {
         temp_l += (WORD16)(
-            ixheaacd_mult32x16in32(
+            ixheaac_mult32x16in32(
                 p_obj_exhaacplus_dec->common_tables->down_mix_martix
                     [k][0][p_obj_exhaacplus_dec->aac_config.slot_element[i]],
                 ptr_time_data[j * total_channels +
@@ -368,7 +386,7 @@ void ixheaacd_dec_downmix_to_stereo(
             14);
 
         temp_r += (WORD16)(
-            ixheaacd_mult32x16in32(
+            ixheaac_mult32x16in32(
                 p_obj_exhaacplus_dec->common_tables->down_mix_martix
                     [k][1][p_obj_exhaacplus_dec->aac_config.slot_element[i]],
                 ptr_time_data[j * total_channels +
@@ -378,7 +396,7 @@ void ixheaacd_dec_downmix_to_stereo(
       }
       if (1 == p_obj_exhaacplus_dec->aac_config.element_type[i]) {
         temp_l += (WORD16)(
-            ixheaacd_mult32x16in32(
+            ixheaac_mult32x16in32(
                 p_obj_exhaacplus_dec->common_tables->down_mix_martix
                     [k][0][p_obj_exhaacplus_dec->aac_config.slot_element[i]],
                 ptr_time_data[j * total_channels +
@@ -387,7 +405,7 @@ void ixheaacd_dec_downmix_to_stereo(
             14);
 
         temp_r += (WORD16)(
-            ixheaacd_mult32x16in32(
+            ixheaac_mult32x16in32(
                 p_obj_exhaacplus_dec->common_tables->down_mix_martix
                     [k][1]
                     [p_obj_exhaacplus_dec->aac_config.slot_element[i] + 1],

@@ -17,9 +17,9 @@
 *****************************************************************************
 * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
-#include "ixheaacd_type_def.h"
-#include <ixheaacd_constants.h>
-#include <ixheaacd_error_standards.h>
+#include "ixheaac_type_def.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_error_standards.h"
 
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_config.h"
@@ -36,17 +36,16 @@ typedef struct {
   WORD32 num_ott_boxes;
   WORD32 num_ttt_boxes;
   WORD32 ott_mode_lfe[MAX_NUM_OTT];
-} TREEPROPERTIES;
+} ia_ld_mps_dec_tree_properties_struct;
 
 static WORD32 ixheaacd_freq_res_table[] = {0, 23, 15, 12, 9, 7, 5, 4};
 
-static WORD32 ixheaacd_HRTF_freq_res_table[][8] = {{0, 28, 20, 14, 10, 7, 5, 4},
+static WORD32 ixheaacd_hrtf_freq_res_table[][8] = {{0, 28, 20, 14, 10, 7, 5, 4},
                                           {0, 13, 13, 8, 7, 4, 3, 3}};
 
-static TREEPROPERTIES ixheaacd_tree_property_table[] = {
-    {1, 6, 5, 0, {0, 0, 0, 0, 1}}, {1, 6, 5, 0, {0, 0, 1, 0, 0}},
-    {2, 6, 3, 1, {1, 0, 0, 0, 0}}, {2, 8, 5, 1, {1, 0, 0, 0, 0}},
-    {2, 8, 5, 1, {1, 0, 0, 0, 0}}, {6, 8, 2, 0, {0, 0, 0, 0, 0}},
+static ia_ld_mps_dec_tree_properties_struct ixheaacd_tree_property_table[] = {
+    {1, 6, 5, 0, {0, 0, 0, 0, 1}}, {1, 6, 5, 0, {0, 0, 1, 0, 0}}, {2, 6, 3, 1, {1, 0, 0, 0, 0}},
+    {2, 8, 5, 1, {1, 0, 0, 0, 0}}, {2, 8, 5, 1, {1, 0, 0, 0, 0}}, {6, 8, 2, 0, {0, 0, 0, 0, 0}},
     {6, 8, 2, 0, {0, 0, 0, 0, 0}}, {1, 2, 1, 0, {0, 0, 0, 0, 0}}};
 
 static IA_ERRORCODE ixheaacd_ld_spatial_extension_config(
@@ -86,6 +85,9 @@ static IA_ERRORCODE ixheaacd_ld_spatial_extension_config(
 
           config->bs_residual_sampling_freq_index =
               ixheaacd_read_bits_buf(it_bit_buff, 4);
+          if (config->bs_residual_sampling_freq_index > MAX_RES_SAMP_FREQ_IDX) {
+            return IA_FATAL_ERROR;
+          }
           config->bs_residual_frames_per_spatial_frame =
               ixheaacd_read_bits_buf(it_bit_buff, 2);
 
@@ -98,6 +100,10 @@ static IA_ERRORCODE ixheaacd_ld_spatial_extension_config(
             if (config->bs_residual_present[j]) {
               config->bs_residual_bands_ld_mps[j] =
                   ixheaacd_read_bits_buf(it_bit_buff, 5);
+              if (config->bs_residual_bands_ld_mps[j] > MAX_PARAMETER_BANDS)
+              {
+                return IA_FATAL_ERROR;
+              }
             }
           }
           break;
@@ -107,10 +113,17 @@ static IA_ERRORCODE ixheaacd_ld_spatial_extension_config(
 
           config->bs_arbitrary_downmix_residual_sampling_freq_index =
               ixheaacd_read_bits_buf(it_bit_buff, 4);
+          if (config->bs_arbitrary_downmix_residual_sampling_freq_index > MAX_RES_SAMP_FREQ_IDX) {
+            return IA_FATAL_ERROR;
+          }
           config->bs_arbitrary_downmix_residual_frames_per_spatial_frame =
               ixheaacd_read_bits_buf(it_bit_buff, 2);
           config->bs_arbitrary_downmix_residual_bands =
               ixheaacd_read_bits_buf(it_bit_buff, 5);
+          if (config->bs_arbitrary_downmix_residual_bands >=
+              ixheaacd_freq_res_table[config->bs_freq_res]) {
+            return IA_FATAL_ERROR;
+          }
 
           break;
 
@@ -269,8 +282,8 @@ IA_ERRORCODE ixheaacd_ld_spatial_specific_config(
       config->bs_HRTF_num_chan = 5;
       config->bs_HRTF_asymmetric = ixheaacd_read_bits_buf(it_bit_buff, 1);
 
-      config->HRTF_num_band = ixheaacd_HRTF_freq_res_table[0][config->bs_HRTF_freq_res];
-      config->HRTF_num_phase = ixheaacd_HRTF_freq_res_table[1][config->bs_HRTF_freq_res];
+      config->HRTF_num_band = ixheaacd_hrtf_freq_res_table[0][config->bs_HRTF_freq_res];
+      config->HRTF_num_phase = ixheaacd_hrtf_freq_res_table[1][config->bs_HRTF_freq_res];
 
       for (hc = 0; hc < config->bs_HRTF_num_chan; hc++) {
         for (hb = 0; hb < config->HRTF_num_band; hb++) {

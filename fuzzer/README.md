@@ -1,6 +1,6 @@
-# Fuzzer for libxaac decoder
+# Fuzzer for libxaac decoder and encoder
 
-This describes steps to build xaac_dec_fuzzer binary.
+This describes steps to build xaac_dec_fuzzer and xaac_enc_fuzzer binary.
 
 ## Linux x86/x64
 
@@ -21,18 +21,13 @@ Create a directory inside libxaac and change directory
  $ mkdir build
  $ cd build
 ```
-Build libxaac using cmake
+
+Build fuzzer with required sanitizers (-DSANITIZE=fuzzer-no-link is mandatory to enable fuzzers)
 ```
- $ CC=clang CXX=clang++ cmake ../ \
-   -DSANITIZE=fuzzer-no-link,address,signed-integer-overflow
+ $ cmake .. -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+   -DCMAKE_BUILD_TYPE=Debug -DSANITIZE=fuzzer-no-link,address,\
+   signed-integer-overflow,unsigned-integer-overflow
  $ make
- ```
-Build the fuzzer
-```
- $ clang++ -std=c++11 -fsanitize=fuzzer,address -I.  -I../  -I../common \
-   -I../decoder -I../decoder/drc_src -Wl,--start-group \
-   ../fuzzer/xaac_dec_fuzzer.cpp -o ./xaac_dec_fuzzer ./libxaacdec.a \
-   -Wl,--end-group
 ```
 
 ### Steps to run
@@ -40,6 +35,7 @@ Create a directory CORPUS_DIR and copy some elementary aac files to that folder
 To run the fuzzer
 ```
 $ ./xaac_dec_fuzzer CORPUS_DIR
+$ ./xaac_enc_fuzzer CORPUS_DIR
 ```
 
 ## Android

@@ -41,6 +41,7 @@
 #define USAC_OUT_FRAMELENGTH_4096 4096
 
 #define MAX_CORE_SBR_FRAME_LEN_IDX (4)
+#define IA_MAX_INP_BUFFER_SIZE (8 * 1024 + 11)
 
 #define ID_EXT_ELE_FILL 0
 #define ID_EXT_ELE_MPEGS 1
@@ -51,8 +52,7 @@
 #define ID_CONFIG_EXT_FILL 0
 #define ID_CONFIG_EXT_LOUDNESS_INFO (2)
 
-#define MAX_PARAMETER_BANDS (40)
-#define MAX_PARAMETER_BANDS_MPS (28)
+#define MAX_PARAMETER_BANDS (28)
 #define MAX_NUM_OTT (5)
 #define MAX_NUM_TTT (1)
 #define MAX_INPUT_CHANNELS (2)
@@ -67,6 +67,8 @@
 #define MAX_OUTPUT_CHANNELS_AT \
   (MAX_OUTPUT_CHANNELS * (1 << MAX_ARBITRARY_TREE_LEVELS))
 #define MAX_ARBITRARY_TREE_INDEX ((1 << (MAX_ARBITRARY_TREE_LEVELS + 1)) - 1)
+
+#define MAX_RES_SAMP_FREQ_IDX 11
 
 typedef UWORD8 UINT8;
 typedef UWORD32 UINT32;
@@ -144,7 +146,7 @@ typedef struct {
 
   UINT32 bs_arbitrary_downmix_residual_sampling_freq_index;
   UINT32 bs_arbitrary_downmix_residual_frames_per_spatial_frame;
-  UINT32 bs_arbitrary_downmix_residual_bands;
+  WORD32 bs_arbitrary_downmix_residual_bands;
 
   UINT32 num_out_chan_AT;
   UINT32 num_ott_boxes_AT;
@@ -711,6 +713,6 @@ UWORD32 ixheaacd_sbr_params(UWORD32 core_sbr_frame_len_idx,
                             UWORD32 *sample_freq_indx);
 
 WORD32 ixheaacd_config(ia_bit_buf_struct *bit_buff,
-                       ia_usac_config_struct *pstr_usac_conf, UINT32 *chan);
+                       ia_usac_config_struct *pstr_usac_conf, UINT32 *chan, WORD32 ec_flag);
 
 #endif /* IXHEAACD_CONFIG_H */

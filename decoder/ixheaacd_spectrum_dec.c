@@ -20,7 +20,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 
 #include "ixheaacd_bitbuffer.h"
 
@@ -28,7 +28,7 @@
 
 #include "ixheaacd_tns_usac.h"
 #include "ixheaacd_cnst.h"
-
+#include "ixheaacd_error_codes.h"
 #include "ixheaacd_acelp_info.h"
 
 #include "ixheaacd_sbrdecsettings.h"
@@ -38,7 +38,9 @@
 #include "ixheaacd_drc_dec.h"
 #include "ixheaacd_sbrdecoder.h"
 #include "ixheaacd_mps_polyphase.h"
-#include "ixheaacd_sbr_const.h"
+#include "ixheaac_sbr_const.h"
+#include "ixheaacd_ec_defines.h"
+#include "ixheaacd_ec_struct_def.h"
 #include "ixheaacd_main.h"
 #include "ixheaacd_arith_dec.h"
 
@@ -320,8 +322,8 @@ VOID ixheaacd_section_data(ia_usac_data_struct *usac_data,
   g_bs->bit_pos = 7 - bit_pos;
   {
     WORD32 bits_consumed;
-    bits_consumed = ((g_bs->ptr_read_next - start_read_pos) << 3) +
-                    (start_bit_pos - g_bs->bit_pos);
+    bits_consumed = (WORD32)(((g_bs->ptr_read_next - start_read_pos) << 3) +
+                             (start_bit_pos - g_bs->bit_pos));
     g_bs->cnt_bits -= bits_consumed;
   }
 }
@@ -367,7 +369,15 @@ WORD32 ixheaacd_fd_channel_stream(
     err_code = ixheaacd_ics_info(usac_data, chn, max_sfb, it_bit_buff,
                                  window_sequence_last);
 
-    if (err_code == -1) return err_code;
+    if (err_code == -1) {
+      if (usac_data->ec_flag) {
+        memcpy(usac_data->max_sfb, pstr_core_coder->max_sfb, sizeof(pstr_core_coder->max_sfb));
+        longjmp(*(it_bit_buff->xaac_jmp_buf),
+                IA_XHEAAC_DEC_EXE_NONFATAL_INSUFFICIENT_INPUT_BYTES);
+      } else {
+        return err_code;
+      }
+    }
   }
   info = usac_data->pstr_sfb_info[chn];
 

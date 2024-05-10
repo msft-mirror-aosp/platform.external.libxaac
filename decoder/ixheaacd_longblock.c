@@ -18,18 +18,18 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include "ixheaacd_sbr_common.h"
-#include "ixheaacd_type_def.h"
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops16.h"
-#include "ixheaacd_basic_ops40.h"
-#include "ixheaacd_basic_ops.h"
+#include "ixheaac_type_def.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops16.h"
+#include "ixheaac_basic_ops40.h"
+#include "ixheaac_basic_ops.h"
 
 #include "ixheaacd_defines.h"
 #include "ixheaacd_aac_rom.h"
 #include "ixheaacd_aac_imdct.h"
 #include "ixheaacd_bitbuffer.h"
-#include "ixheaacd_basic_op.h"
+#include "ixheaac_basic_op.h"
 #include "ixheaacd_intrinsics.h"
 
 #include "ixheaacd_pulsedata.h"
@@ -39,9 +39,10 @@
 #include "ixheaacd_drc_data_struct.h"
 
 #include "ixheaacd_lt_predict.h"
-
-#include "ixheaacd_channelinfo.h"
 #include "ixheaacd_cnst.h"
+#include "ixheaacd_ec_defines.h"
+#include "ixheaacd_ec_struct_def.h"
+#include "ixheaacd_channelinfo.h"
 #include "ixheaacd_drc_dec.h"
 
 #include "ixheaacd_block.h"
@@ -124,7 +125,7 @@ IA_ERRORCODE ixheaacd_read_section_data(
             band_offsets[top] - band_offsets[sfb];
         num_lines_sec_idx++;
         if (sect_cb == (ESC_HCB + 1)) {
-          return IA_ENHAACPLUS_DEC_EXE_NONFATAL_INVALID_CODE_BOOK;
+          return IA_XHEAAC_DEC_EXE_NONFATAL_INVALID_CODE_BOOK;
         } else {
           *ptr_hcr_code_book++ = sect_cb;
         }
@@ -134,11 +135,11 @@ IA_ERRORCODE ixheaacd_read_section_data(
       sfb = (sfb + sect_len);
       if (sfb > max_sfb) {
         return (WORD16)(
-            (WORD32)IA_ENHAACPLUS_DEC_EXE_NONFATAL_EXCEEDS_SFB_TRANSMITTED);
+            (WORD32)IA_XHEAAC_DEC_EXE_NONFATAL_EXCEEDS_SFB_TRANSMITTED);
       }
       if (sect_cb == (ESC_HCB + 1)) {
         return (WORD16)(
-            (WORD32)IA_ENHAACPLUS_DEC_EXE_NONFATAL_INVALID_CODE_BOOK);
+            (WORD32)IA_XHEAAC_DEC_EXE_NONFATAL_INVALID_CODE_BOOK);
       }
 
       while (sect_len--) {
@@ -254,7 +255,7 @@ VOID ixheaacd_read_scale_factor_data(
               *ptr_scale_fact_short++ = factor;
             } else {
               ptr_pns_info->noise_energy =
-                  ixheaacd_add16_sat(ptr_pns_info->noise_energy, norm_value);
+                  ixheaac_add16_sat(ptr_pns_info->noise_energy, norm_value);
 
               pns_band = (num_win_group << 4) +
                          ptr_aac_dec_channel_info->str_ics_info.max_sfb - sfb -
@@ -271,7 +272,7 @@ VOID ixheaacd_read_scale_factor_data(
               *ptr_scale_fact_short++ = -position;
             } else if (sfb_cb == NOISE_HCB) {
               ptr_pns_info->noise_energy =
-                  ixheaacd_add16_sat(ptr_pns_info->noise_energy, norm_value);
+                  ixheaac_add16_sat(ptr_pns_info->noise_energy, norm_value);
 
               pns_band = (num_win_group << 4) +
                          ptr_aac_dec_channel_info->str_ics_info.max_sfb - sfb -
@@ -297,8 +298,9 @@ VOID ixheaacd_read_scale_factor_data(
   it_bit_buff->bit_pos = 7 - bit_pos;
   {
     WORD bits_consumed;
-    bits_consumed = ((it_bit_buff->ptr_read_next - start_read_pos) << 3) +
-                    (start_bit_pos - it_bit_buff->bit_pos);
+    bits_consumed =
+        (WORD)(((it_bit_buff->ptr_read_next - start_read_pos) << 3) +
+               (start_bit_pos - it_bit_buff->bit_pos));
     it_bit_buff->cnt_bits -= bits_consumed;
   }
 }

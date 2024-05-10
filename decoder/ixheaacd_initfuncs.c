@@ -18,18 +18,18 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include <string.h>
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 
 #include "ixheaacd_sbr_common.h"
 
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops16.h"
-#include "ixheaacd_basic_ops40.h"
-#include "ixheaacd_basic_ops.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops16.h"
+#include "ixheaac_basic_ops40.h"
+#include "ixheaac_basic_ops.h"
 #include "ixheaacd_bitbuffer.h"
 
-#include "ixheaacd_basic_op.h"
+#include "ixheaac_basic_op.h"
 #include "ixheaacd_intrinsics.h"
 
 #include "ixheaacd_defines.h"
@@ -46,6 +46,9 @@
 #include "ixheaacd_drc_data_struct.h"
 
 #include "ixheaacd_lt_predict.h"
+#include "ixheaacd_cnst.h"
+#include "ixheaacd_ec_defines.h"
+#include "ixheaacd_ec_struct_def.h"
 
 #include "ixheaacd_channelinfo.h"
 #include "ixheaacd_drc_dec.h"
@@ -76,6 +79,10 @@
 #include "ixheaacd_mps_polyphase.h"
 #include "ixheaacd_config.h"
 #include "ixheaacd_qmf_dec.h"
+#include "ixheaacd_mps_macro_def.h"
+#include "ixheaacd_mps_struct_def.h"
+#include "ixheaacd_mps_res_rom.h"
+#include "ixheaacd_mps_aac_struct.h"
 #include "ixheaacd_mps_dec.h"
 
 #include "ixheaacd_struct_def.h"
@@ -109,6 +116,16 @@ WORD32 ixheaacd_set_aac_persistent_buffers(VOID *aac_persistent_mem_v,
          ALIGN_SIZE64(MAXSBRBYTES) * num_channel * sizeof(WORD8));
 
   persistent_used += ALIGN_SIZE64(MAXSBRBYTES) * num_channel * sizeof(WORD8);
+
+  aac_persistent_mem->prev_sbr_payload_buffer =
+      (WORD8 *)((WORD8 *)aac_persistent_mem_v + persistent_used);
+
+  memset((WORD8 *)aac_persistent_mem->prev_sbr_payload_buffer, 0,
+         ALIGN_SIZE64(MAXSBRBYTES) * num_channel *
+         sizeof(*(aac_persistent_mem->prev_sbr_payload_buffer)));
+
+  persistent_used += ALIGN_SIZE64(MAXSBRBYTES) * num_channel *
+         sizeof(*(aac_persistent_mem->prev_sbr_payload_buffer));
 
   {
     WORD32 i;
@@ -405,8 +422,13 @@ ia_aac_decoder_struct *ixheaacd_aac_decoder_init(
     ptr_sbr_bitstream->no_elements = 0;
     ptr_sbr_bitstream->str_sbr_ele[0].ptr_sbr_data =
         &aac_persistent_mem->sbr_payload_buffer[ALIGN_SIZE64(MAXSBRBYTES) * i];
+    ptr_sbr_bitstream->str_sbr_ele[0].ptr_prev_sbr_data =
+        &aac_persistent_mem->prev_sbr_payload_buffer[ALIGN_SIZE64(MAXSBRBYTES) * i];
     ptr_sbr_bitstream->str_sbr_ele[0].sbr_ele_id = ID_SCE;
     ptr_sbr_bitstream->str_sbr_ele[0].size_payload = 0;
+    ptr_sbr_bitstream->str_sbr_ele[0].prev_size_payload = 0;
+    ptr_sbr_bitstream->str_sbr_ele[0].prev_sbr_ele_id = ID_SCE;
+    ptr_sbr_bitstream->str_sbr_ele[0].size_payload_old = 0;
   }
 
   {
