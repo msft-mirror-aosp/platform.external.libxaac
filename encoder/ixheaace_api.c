@@ -136,10 +136,12 @@
 #include "ixheaace_api_defs.h"
 
 #include "ixheaace_write_adts_adif.h"
+#include "ixheaace_loudness_measurement.h"
+#include "iusace_psy_utils.h"
 
 static WORD32 iusace_scratch_size(VOID) {
   WORD32 scr_size;
-  scr_size = IXHEAACE_GET_SIZE_ALIGNED(USACE_MAX_SCR_SIZE, BYTE_ALIGN_8);
+  scr_size = IXHEAAC_GET_SIZE_ALIGNED(USACE_MAX_SCR_SIZE, BYTE_ALIGN_8);
   return scr_size;
 }
 
@@ -147,39 +149,39 @@ static WORD32 iusace_calc_pers_buf_sizes(ixheaace_api_struct *pstr_api_struct) {
   WORD32 pers_size = 0;
   ia_usac_encoder_config_struct *pstr_config = &pstr_api_struct->config[0].usac_config;
 
-  pers_size += IXHEAACE_GET_SIZE_ALIGNED(pstr_config->channels * sizeof(FLOAT32 *), BYTE_ALIGN_8);
-  pers_size += IXHEAACE_GET_SIZE_ALIGNED(pstr_config->channels * sizeof(FLOAT32 *), BYTE_ALIGN_8);
-  pers_size += IXHEAACE_GET_SIZE_ALIGNED(pstr_config->channels * sizeof(FLOAT32 *), BYTE_ALIGN_8);
-  pers_size += IXHEAACE_GET_SIZE_ALIGNED(pstr_config->channels * sizeof(FLOAT32 *), BYTE_ALIGN_8);
+  pers_size += IXHEAAC_GET_SIZE_ALIGNED(pstr_config->channels * sizeof(FLOAT32 *), BYTE_ALIGN_8);
+  pers_size += IXHEAAC_GET_SIZE_ALIGNED(pstr_config->channels * sizeof(FLOAT32 *), BYTE_ALIGN_8);
+  pers_size += IXHEAAC_GET_SIZE_ALIGNED(pstr_config->channels * sizeof(FLOAT32 *), BYTE_ALIGN_8);
+  pers_size += IXHEAAC_GET_SIZE_ALIGNED(pstr_config->channels * sizeof(FLOAT32 *), BYTE_ALIGN_8);
 
   pers_size +=
-      (IXHEAACE_GET_SIZE_ALIGNED((2 * pstr_config->ccfl * sizeof(FLOAT32)), BYTE_ALIGN_8) *
+      (IXHEAAC_GET_SIZE_ALIGNED((2 * pstr_config->ccfl * sizeof(FLOAT32)), BYTE_ALIGN_8) *
        pstr_config->channels);
-  pers_size += (IXHEAACE_GET_SIZE_ALIGNED((2 * pstr_config->drc_frame_size * sizeof(FLOAT32)),
+  pers_size += (IXHEAAC_GET_SIZE_ALIGNED((2 * pstr_config->drc_frame_size * sizeof(FLOAT32)),
                                           BYTE_ALIGN_8) *
                 pstr_config->channels);
 
   pers_size +=
-      (IXHEAACE_GET_SIZE_ALIGNED((2 * pstr_config->ccfl * sizeof(FLOAT64)), BYTE_ALIGN_8) *
+      (IXHEAAC_GET_SIZE_ALIGNED((2 * pstr_config->ccfl * sizeof(FLOAT64)), BYTE_ALIGN_8) *
        pstr_config->channels);
 
-  pers_size += (IXHEAACE_GET_SIZE_ALIGNED((pstr_config->ccfl * sizeof(FLOAT64)), BYTE_ALIGN_8) *
+  pers_size += (IXHEAAC_GET_SIZE_ALIGNED((pstr_config->ccfl * sizeof(FLOAT64)), BYTE_ALIGN_8) *
                 pstr_config->channels);
 
   pers_size +=
-      (IXHEAACE_GET_SIZE_ALIGNED((2 * pstr_config->ccfl * sizeof(FLOAT64)), BYTE_ALIGN_8) *
+      (IXHEAAC_GET_SIZE_ALIGNED((2 * pstr_config->ccfl * sizeof(FLOAT64)), BYTE_ALIGN_8) *
        pstr_config->channels);
 
   pers_size +=
-      (IXHEAACE_GET_SIZE_ALIGNED((3 * pstr_config->ccfl * sizeof(FLOAT64)), BYTE_ALIGN_8) *
+      (IXHEAAC_GET_SIZE_ALIGNED((3 * pstr_config->ccfl * sizeof(FLOAT64)), BYTE_ALIGN_8) *
        pstr_config->channels);
 
   if (pstr_config->tns_select != 0) {
     pers_size +=
-        (IXHEAACE_GET_SIZE_ALIGNED(sizeof(ia_tns_info), BYTE_ALIGN_8) * pstr_config->channels);
+        (IXHEAAC_GET_SIZE_ALIGNED(sizeof(ia_tns_info), BYTE_ALIGN_8) * pstr_config->channels);
   }
 
-  pers_size += (IXHEAACE_GET_SIZE_ALIGNED(sizeof(ia_usac_td_encoder_struct), BYTE_ALIGN_8) *
+  pers_size += (IXHEAAC_GET_SIZE_ALIGNED(sizeof(ia_usac_td_encoder_struct), BYTE_ALIGN_8) *
                 pstr_config->channels);
   return pers_size;
 }
@@ -525,6 +527,10 @@ static VOID ixheaace_set_default_config(ixheaace_api_struct *pstr_api_struct,
     pstr_usac_config->cmplx_pred_flag = USAC_COMPLEX_PREDECTION_DEFAULT_VALUE;
     pstr_usac_config->tns_select = USAC_TNS_DEFAULT_VALUE;
     pstr_usac_config->flag_noiseFilling = USAC_FLAG_NOISE_FILLING_DEFAULT_VALUE;
+    pstr_usac_config->use_acelp_only = USAC_DEFAULT_ACELP_FLAG_VALUE;
+    pstr_usac_config->is_first_frame = USAC_FIRST_FRAME_FLAG_DEFAULT_VALUE;
+    pstr_usac_config->num_preroll_frames = CC_NUM_PREROLL_FRAMES;
+    pstr_usac_config->stream_id = USAC_DEFAULT_STREAM_ID_VALUE;
   }
   /* Initialize table pointers */
   ia_enhaacplus_enc_init_aac_tabs(&(pstr_api_struct->pstr_aac_tabs));
@@ -533,48 +539,15 @@ static VOID ixheaace_set_default_config(ixheaace_api_struct *pstr_api_struct,
       (ixheaace_common_tables *)&ia_enhaacplus_enc_common_tab;
 }
 
-static VOID ixheaace_validate_config_params(ixheaace_input_config *pstr_input_config) {
+static IA_ERRORCODE ixheaace_validate_config_params(ixheaace_input_config *pstr_input_config) {
+  IA_ERRORCODE err_code = IA_NO_ERROR;
   if (pstr_input_config->aot != AOT_AAC_ELD && pstr_input_config->aot != AOT_AAC_LC &&
       pstr_input_config->aot != AOT_AAC_LD && pstr_input_config->aot != AOT_PS &&
       pstr_input_config->aot != AOT_SBR && pstr_input_config->aot != AOT_USAC) {
     pstr_input_config->aot = AOT_AAC_LC;
   }
   pstr_input_config->i_native_samp_freq = pstr_input_config->i_samp_freq;
-  if (pstr_input_config->i_samp_freq < 9391) {
-    pstr_input_config->i_samp_freq = 8000;
-  } else if ((pstr_input_config->i_samp_freq >= 9391) &&
-             (pstr_input_config->i_samp_freq < 11502)) {
-    pstr_input_config->i_samp_freq = 11025;
-  } else if ((pstr_input_config->i_samp_freq >= 11502) &&
-             (pstr_input_config->i_samp_freq < 13856)) {
-    pstr_input_config->i_samp_freq = 12000;
-  } else if ((pstr_input_config->i_samp_freq >= 13856) &&
-             (pstr_input_config->i_samp_freq < 18783)) {
-    pstr_input_config->i_samp_freq = 16000;
-  } else if ((pstr_input_config->i_samp_freq >= 18783) &&
-             (pstr_input_config->i_samp_freq < 23004)) {
-    pstr_input_config->i_samp_freq = 22050;
-  } else if ((pstr_input_config->i_samp_freq >= 23004) &&
-             (pstr_input_config->i_samp_freq < 27713)) {
-    pstr_input_config->i_samp_freq = 24000;
-  } else if ((pstr_input_config->i_samp_freq >= 27713) &&
-             (pstr_input_config->i_samp_freq < 37566)) {
-    pstr_input_config->i_samp_freq = 32000;
-  } else if ((pstr_input_config->i_samp_freq >= 37566) &&
-             (pstr_input_config->i_samp_freq < 46009)) {
-    pstr_input_config->i_samp_freq = 44100;
-  } else if ((pstr_input_config->i_samp_freq >= 46009) &&
-             (pstr_input_config->i_samp_freq < 55426)) {
-    pstr_input_config->i_samp_freq = 48000;
-  } else if ((pstr_input_config->i_samp_freq >= 55426) &&
-             (pstr_input_config->i_samp_freq < 75132)) {
-    pstr_input_config->i_samp_freq = 64000;
-  } else if ((pstr_input_config->i_samp_freq >= 75132) &&
-             (pstr_input_config->i_samp_freq < 92017)) {
-    pstr_input_config->i_samp_freq = 88200;
-  } else if (pstr_input_config->i_samp_freq >= 92017) {
-    pstr_input_config->i_samp_freq = 96000;
-  }
+  pstr_input_config->i_samp_freq = iusace_map_sample_rate(pstr_input_config->i_samp_freq);
 
   if ((pstr_input_config->i_channels < MIN_NUM_CORE_CODER_CHANNELS) ||
       (pstr_input_config->i_channels > MAX_NUM_CORE_CODER_CHANNELS)) {
@@ -639,6 +612,17 @@ static VOID ixheaace_validate_config_params(ixheaace_input_config *pstr_input_co
     if (pstr_input_config->ccfl_idx < NO_SBR_CCFL_768 || pstr_input_config->ccfl_idx > SBR_4_1) {
       pstr_input_config->ccfl_idx = NO_SBR_CCFL_1024;  // default value
     }
+    if ((pstr_input_config->ccfl_idx == SBR_4_1) && (pstr_input_config->i_samp_freq < 32000))
+    {
+      if (pstr_input_config->i_samp_freq >= 16000)
+      {
+        pstr_input_config->ccfl_idx = SBR_2_1;
+      }
+      else
+      {
+        pstr_input_config->ccfl_idx = NO_SBR_CCFL_1024;
+      }
+    }
     if (pstr_input_config->cplx_pred != 1 && pstr_input_config->cplx_pred != 0) {
       pstr_input_config->cplx_pred = 0;
     }
@@ -702,7 +686,7 @@ static VOID ixheaace_validate_config_params(ixheaace_input_config *pstr_input_co
 
     {
       if ((pstr_input_config->codec_mode == USAC_SWITCHED ||
-           pstr_input_config->codec_mode == USAC_ONLY_TD) &&
+           pstr_input_config->codec_mode == USAC_ONLY_TD) && pstr_input_config->esbr_flag &&
           pstr_input_config->i_samp_freq > 24000) {
         if (pstr_input_config->ccfl_idx == NO_SBR_CCFL_768) {
           pstr_input_config->ccfl_idx = SBR_8_3;  // Use 8:3 eSBR
@@ -728,6 +712,34 @@ static VOID ixheaace_validate_config_params(ixheaace_input_config *pstr_input_co
         pstr_input_config->frame_length = LEN_SUPERFRAME_768;
       } else {
         pstr_input_config->frame_length = LEN_SUPERFRAME;
+      }
+    }
+    if (pstr_input_config->random_access_interval < MIN_RAP_INTERVAL_IN_MS) {
+      pstr_input_config->random_access_interval = DEFAULT_RAP_INTERVAL_IN_MS;
+    }
+    if (pstr_input_config->method_def > MAX_METHOD_DEFINITION_TYPE) {
+      pstr_input_config->method_def = METHOD_DEFINITION_PROGRAM_LOUDNESS;
+    }
+    if (pstr_input_config->measurement_system != MEASUREMENT_SYSTEM_BS_1770_3) {
+      pstr_input_config->measurement_system = MEASUREMENT_SYSTEM_BS_1770_3;
+    }
+    if (pstr_input_config->measured_loudness > MAX_METHOD_VALUE ||
+        pstr_input_config->measured_loudness < MIN_METHOD_VALUE) {
+      pstr_input_config->measured_loudness = DEFAULT_METHOD_VALUE;
+    }
+    if (pstr_input_config->sample_peak_level > MAX_SAMPLE_PEAK_LEVEL ||
+        pstr_input_config->sample_peak_level < MIN_SAMPLE_PEAK_LEVEL) {
+      pstr_input_config->sample_peak_level = DEFAULT_SAMPLE_PEAK_VALUE;
+    }
+    if (pstr_input_config->use_drc_element) {
+      ia_drc_input_config *pstr_drc_cfg = (ia_drc_input_config *)pstr_input_config->pv_drc_cfg;
+      err_code = impd_drc_validate_config_params(pstr_drc_cfg);
+      if (err_code & IA_FATAL_ERROR) {
+        return err_code;
+      }
+      if (err_code) {
+        pstr_input_config->use_drc_element = 0;
+        err_code = IA_NO_ERROR;
       }
     }
   } else {
@@ -788,13 +800,18 @@ static VOID ixheaace_validate_config_params(ixheaace_input_config *pstr_input_co
       pstr_input_config->esbr_flag = 0;
     }
   }
+  return err_code;
 }
 
 static IA_ERRORCODE ixheaace_set_config_params(ixheaace_api_struct *pstr_api_struct,
                                                ixheaace_input_config *pstr_input_config) {
   WORD32 ele_idx;
+  IA_ERRORCODE err_code = IA_NO_ERROR;
   ia_usac_encoder_config_struct *pstr_usac_config = &pstr_api_struct->config[0].usac_config;
-  ixheaace_validate_config_params(pstr_input_config);
+  err_code = ixheaace_validate_config_params(pstr_input_config);
+  if (err_code) {
+    return err_code;
+  }
 
   if (pstr_input_config->ui_pcm_wd_sz != 16) {
     return (IA_EXHEAACE_CONFIG_FATAL_PCM_WDSZ);
@@ -947,6 +964,25 @@ static IA_ERRORCODE ixheaace_set_config_params(ixheaace_api_struct *pstr_api_str
         pstr_usac_config->drc_frame_size = LEN_SUPERFRAME;
         break;
     }
+    pstr_usac_config->random_access_interval = pstr_input_config->random_access_interval;
+    if (pstr_usac_config->random_access_interval > 0) {
+      pstr_usac_config->random_access_interval =
+          (WORD32)((((WORD64)pstr_usac_config->random_access_interval *
+                     pstr_input_config->i_native_samp_freq) +
+                    (pstr_usac_config->ccfl * 1000 - 1)) /
+                   (pstr_usac_config->ccfl * 1000));
+    }
+
+    if (pstr_usac_config->random_access_interval) {
+      pstr_usac_config->preroll_flag = 1;
+    }
+    if (pstr_usac_config->sbr_enable == 1) {
+      pstr_usac_config->num_preroll_frames++;
+      if (pstr_usac_config->sbr_harmonic == 1) {
+        pstr_usac_config->num_preroll_frames++;
+      }
+    }
+    pstr_usac_config->stream_id = pstr_input_config->stream_id;
     if (pstr_input_config->ccfl_idx < NO_SBR_CCFL_768 || pstr_input_config->ccfl_idx > SBR_4_1) {
       pstr_api_struct->config[0].ccfl_idx = NO_SBR_CCFL_1024;  // default value
     } else {
@@ -966,11 +1002,12 @@ static IA_ERRORCODE ixheaace_set_config_params(ixheaace_api_struct *pstr_api_str
           (ixheaace_resampler_table *)&ixheaace_resamp_4_to_1_iir_filt_params;
     }
     pstr_usac_config->use_drc_element = pstr_input_config->use_drc_element;
-    if (pstr_usac_config->use_drc_element) {
+    {
       ia_drc_input_config *pstr_drc_cfg = (ia_drc_input_config *)pstr_input_config->pv_drc_cfg;
       pstr_drc_cfg->str_uni_drc_config.str_channel_layout.base_ch_count =
           pstr_input_config->i_channels;
       pstr_drc_cfg->str_enc_params.sample_rate = pstr_input_config->i_samp_freq;
+      pstr_drc_cfg->str_enc_params.domain = TIME_DOMAIN;
       pstr_drc_cfg->str_uni_drc_config.sample_rate = pstr_drc_cfg->str_enc_params.sample_rate;
       for (WORD32 i = 0; i < pstr_drc_cfg->str_uni_drc_config.drc_coefficients_uni_drc_count;
            i++) {
@@ -983,15 +1020,24 @@ static IA_ERRORCODE ixheaace_set_config_params(ixheaace_api_struct *pstr_api_str
               impd_drc_get_delta_t_min(pstr_drc_cfg->str_uni_drc_config.sample_rate);
         }
       }
+      for (WORD32 i = 0; i < pstr_drc_cfg->str_uni_drc_config.str_uni_drc_config_ext
+        .drc_coefficients_uni_drc_v1_count; i++) {
+        for (WORD32 j = 0;
+          j < pstr_drc_cfg->str_uni_drc_config.str_uni_drc_config_ext
+          .str_drc_coefficients_uni_drc_v1[i].gain_set_count; j++) {
+          pstr_drc_cfg->str_uni_drc_config.str_uni_drc_config_ext
+            .str_drc_coefficients_uni_drc_v1[i]
+            .str_gain_set_params[j]
+            .delta_tmin =
+            impd_drc_get_delta_t_min(pstr_drc_cfg->str_uni_drc_config.sample_rate);
+        }
+      }
 
       pstr_usac_config->str_drc_cfg = *pstr_drc_cfg;
       pstr_usac_config->str_drc_cfg.str_enc_params.frame_size = pstr_usac_config->drc_frame_size;
       pstr_usac_config->str_drc_cfg.str_uni_drc_config.str_drc_coefficients_uni_drc
           ->drc_frame_size = pstr_usac_config->drc_frame_size;
       pstr_input_config->drc_frame_size = pstr_usac_config->drc_frame_size;
-    } else {
-      pstr_usac_config->drc_frame_size = 0;
-      pstr_input_config->drc_frame_size = 0;
     }
   } else {
     if ((pstr_input_config->i_channels > MAX_NUM_CORE_CODER_CHANNELS)) {
@@ -1169,7 +1215,7 @@ static VOID ixheaace_fill_mem_tabs(ixheaace_api_struct *pstr_api_struct, WORD32 
       pstr_mem_info = &pstr_api_struct->pstr_mem_info[IA_ENHAACPLUSENC_PERSIST_IDX];
       {
         pstr_mem_info->ui_size =
-            IXHEAACE_GET_SIZE_ALIGNED(sizeof(ixheaace_state_struct), BYTE_ALIGN_8) +
+            IXHEAAC_GET_SIZE_ALIGNED(sizeof(ixheaace_state_struct), BYTE_ALIGN_8) +
             iusace_calc_pers_buf_sizes(pstr_api_struct);
         if (pstr_api_struct->config[0].usac_config.sbr_enable) {
           pstr_mem_info->ui_size += ixheaace_sbr_enc_pers_size(
@@ -1181,30 +1227,30 @@ static VOID ixheaace_fill_mem_tabs(ixheaace_api_struct *pstr_api_struct, WORD32 
                           sizeof(pstr_api_struct->pstr_state->inp_delay[0]),
                           pstr_api_struct->config[0].use_mps) *
                       pstr_api_struct->config[0].num_bs_elements;
-        pstr_mem_info->ui_size += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+        pstr_mem_info->ui_size += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
 
         if (pstr_api_struct->config[0].use_mps) {
           offset_size =
               (MAX_INPUT_SAMPLES) * sizeof(pstr_api_struct->pstr_state->time_signal_mps[0]);
-          pstr_mem_info->ui_size += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+          pstr_mem_info->ui_size += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
 
           offset_size =
               (MAX_MPS_BS_PAYLOAD_SIZE) * sizeof(pstr_api_struct->pstr_state->mps_bs[0]);
-          pstr_mem_info->ui_size += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+          pstr_mem_info->ui_size += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
 
           pstr_mem_info->ui_size +=
-              IXHEAACE_GET_SIZE_ALIGNED(sizeof(ixheaace_mps_212_memory_struct), BYTE_ALIGN_8);
+              IXHEAAC_GET_SIZE_ALIGNED(sizeof(ixheaace_mps_212_memory_struct), BYTE_ALIGN_8);
         }
         if (1 == pstr_api_struct->config[0].usac_config.sbr_enable) {
           offset_size =
               (MAX_FRAME_LEN * (1 << fac_downsample) + MAX_DS_8_1_FILTER_DELAY + INPUT_DELAY) *
               MAX_CHANNELS * sizeof(pstr_mem_info->ui_size);
-          pstr_mem_info->ui_size += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+          pstr_mem_info->ui_size += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
         }
         if ((2 != pstr_api_struct->config[0].usac_config.channels) &&
             (1 == pstr_api_struct->config[0].usac_config.sbr_enable)) {
           offset_size = (MAX_INPUT_SAMPLES) * sizeof(pstr_api_struct->pstr_state->time_signal[0]);
-          pstr_mem_info->ui_size += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+          pstr_mem_info->ui_size += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
         }
       }
 
@@ -1274,7 +1320,9 @@ static VOID ixheaace_fill_mem_tabs(ixheaace_api_struct *pstr_api_struct, WORD32 
     /* output */
     {
       pstr_mem_info = &pstr_api_struct->pstr_mem_info[IA_ENHAACPLUSENC_OUTPUT_IDX];
-      pstr_mem_info->ui_size = (MAXIMUM_CHANNEL_BITS_1024 / BYTE_NUMBIT) * num_channel;
+      pstr_mem_info->ui_size =
+          ((MAX_PREROLL_FRAMES + 1) * (MAX_CHANNEL_BITS / BYTE_NUMBIT) * num_channel) +
+          MAX_PREROLL_CONFIG_SIZE;
       pstr_mem_info->ui_alignment = BYTE_ALIGN_8;
       pstr_mem_info->ui_type = IA_MEMTYPE_OUTPUT;
       pstr_mem_info->ui_placement[0] = 0;
@@ -1295,7 +1343,7 @@ static VOID ixheaace_fill_mem_tabs(ixheaace_api_struct *pstr_api_struct, WORD32 
                                    ? 1
                                    : pstr_api_struct->config[0].chmode_nchannels);
           pstr_mem_info->ui_size =
-              IXHEAACE_GET_SIZE_ALIGNED(sizeof(ixheaace_state_struct), BYTE_ALIGN_8) +
+              IXHEAAC_GET_SIZE_ALIGNED(sizeof(ixheaace_state_struct), BYTE_ALIGN_8) +
               ia_enhaacplus_enc_aac_enc_pers_size(num_channel, aot);
           if (pstr_api_struct->config[0].aot != AOT_AAC_LC &&
               pstr_api_struct->config[0].aot != AOT_AAC_LD) {
@@ -1307,16 +1355,16 @@ static VOID ixheaace_fill_mem_tabs(ixheaace_api_struct *pstr_api_struct, WORD32 
                             sizeof(pstr_api_struct->pstr_state->inp_delay[0]),
                             pstr_api_struct->config[0].use_mps) *
                         pstr_api_struct->config[0].num_bs_elements;
-          pstr_mem_info->ui_size += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+          pstr_mem_info->ui_size += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
         }
         if (pstr_api_struct->config[0].num_bs_elements > 1) {
-          offset_size = IXHEAACE_GET_SIZE_ALIGNED(sizeof(ixheaace_state_struct), BYTE_ALIGN_8) +
+          offset_size = IXHEAAC_GET_SIZE_ALIGNED(sizeof(ixheaace_state_struct), BYTE_ALIGN_8) +
                         ia_enhaacplus_enc_sizeof_delay_buffer(
                             pstr_api_struct->config[0].aac_config.flag_framelength_small, aot, 3,
                             sizeof(pstr_api_struct->pstr_state->inp_delay[0]),
                             pstr_api_struct->config[0].use_mps) *
                             pstr_api_struct->config[0].num_bs_elements;
-          pstr_mem_info->ui_size += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+          pstr_mem_info->ui_size += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
           for (ele_idx = 0; ele_idx < pstr_api_struct->config[0].num_bs_elements; ele_idx++) {
             num_channel = pstr_api_struct->config[ele_idx].i_channels;
             if (pstr_api_struct->config[ele_idx].element_type != ID_LFE)
@@ -1335,24 +1383,24 @@ static VOID ixheaace_fill_mem_tabs(ixheaace_api_struct *pstr_api_struct, WORD32 
                 (MAX_INPUT_SAMPLES + (INPUT_DELAY_ELDV2_512 * IXHEAACE_MAX_CH_IN_BS_ELE)) *
                 sizeof(pstr_api_struct->pstr_state->time_signal_mps[0]);
           }
-          pstr_mem_info->ui_size += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+          pstr_mem_info->ui_size += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
           if (pstr_api_struct->config[0].mps_tree_config == TREE_212) {
             pstr_mem_info->ui_size +=
-                IXHEAACE_GET_SIZE_ALIGNED(sizeof(ixheaace_mps_212_memory_struct), BYTE_ALIGN_8);
+                IXHEAAC_GET_SIZE_ALIGNED(sizeof(ixheaace_mps_212_memory_struct), BYTE_ALIGN_8);
           } else {
             pstr_mem_info->ui_size +=
-                IXHEAACE_GET_SIZE_ALIGNED(sizeof(ixheaace_mps_515_memory_struct), BYTE_ALIGN_8);
+                IXHEAAC_GET_SIZE_ALIGNED(sizeof(ixheaace_mps_515_memory_struct), BYTE_ALIGN_8);
           }
-          pstr_mem_info->ui_size += IXHEAACE_GET_SIZE_ALIGNED(
+          pstr_mem_info->ui_size += IXHEAAC_GET_SIZE_ALIGNED(
               (MAX_MPS_BS_PAYLOAD_SIZE) * sizeof(pstr_api_struct->pstr_state->mps_bs[0]),
               BYTE_ALIGN_8);
         }
 
         offset_size = IXHEAACE_MAX_PAYLOAD_SIZE * pstr_api_struct->config[0].num_bs_elements;
-        pstr_mem_info->ui_size += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+        pstr_mem_info->ui_size += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
         offset_size = (MAX_FRAME_LEN * 2 + MAX_DS_2_1_FILTER_DELAY + INPUT_DELAY) *
                       MAX_INPUT_CHAN * sizeof(pstr_mem_info->ui_size);
-        pstr_mem_info->ui_size += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+        pstr_mem_info->ui_size += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
       }
 
       pstr_mem_info->ui_alignment = BYTE_ALIGN_8;
@@ -1436,12 +1484,54 @@ static VOID ixheaace_fill_mem_tabs(ixheaace_api_struct *pstr_api_struct, WORD32 
   return;
 }
 
+static WORD32 get_drc_config_size(ixheaace_api_struct *pstr_api_struct,
+                                  ixheaace_input_config *ptr_in_cfg) {
+  WORD32 bit_count = 0;
+  WORD32 total_byte_cnt = 0;
+
+  ia_drc_enc_state *pstr_drc_state =
+      &pstr_api_struct->pstr_state->str_usac_enc_data.str_drc_state;
+  ia_drc_input_config *pstr_in_drc_cfg = (ia_drc_input_config *)ptr_in_cfg->pv_drc_cfg;
+
+  memset(pstr_drc_state, 0, sizeof(*pstr_drc_state));
+
+  pstr_drc_state->str_enc_params = pstr_in_drc_cfg->str_enc_params;
+  pstr_drc_state->str_uni_drc_config = pstr_in_drc_cfg->str_uni_drc_config;
+  pstr_drc_state->str_gain_enc.str_loudness_info_set = pstr_in_drc_cfg->str_enc_loudness_info_set;
+  pstr_drc_state->str_enc_gain_extension = pstr_in_drc_cfg->str_enc_gain_extension;
+  pstr_drc_state->str_gain_enc.str_uni_drc_config = pstr_in_drc_cfg->str_uni_drc_config;
+  pstr_drc_state->drc_scratch_mem =
+      pstr_api_struct->pstr_state->str_usac_enc_data.str_scratch.ptr_scratch_buf;
+  pstr_drc_state->str_gain_enc.base_ch_count = ptr_in_cfg->i_channels;
+
+  //uniDrc payload size
+  impd_drc_write_uni_drc_config(pstr_drc_state, &bit_count, 0);
+  total_byte_cnt += ((bit_count + 7) >> 3);
+  bit_count = 0;
+
+  // LoudnessInfo payload size
+  impd_drc_write_loudness_info_set(pstr_drc_state, NULL, &bit_count, 0);
+  total_byte_cnt += ((bit_count + 7) >> 3);
+
+  return total_byte_cnt;
+}
+
 static IA_ERRORCODE ixheaace_alloc_and_assign_mem(ixheaace_api_struct *pstr_api_struct,
-                                                  ixheaace_output_config *ptr_out_cfg) {
+                                                  ixheaace_output_config *ptr_out_cfg,
+                                                  ixheaace_input_config *ptr_in_cfg) {
   IA_ERRORCODE err_code = IA_NO_ERROR;
   UWORD32 i_idx;
   pVOID pv_value;
   for (i_idx = 0; i_idx < 4; i_idx++) {
+    if (i_idx == IA_ENHAACPLUSENC_OUTPUT_IDX &&
+        pstr_api_struct->config[0].usac_config.use_drc_element) {
+      WORD32 drc_config_size_expected =
+          get_drc_config_size(pstr_api_struct, ptr_in_cfg);
+      if (drc_config_size_expected > MAX_DRC_CONFIG_SIZE_EXPECTED) {
+        return IA_EXHEAACE_CONFIG_FATAL_DRC_INVALID_CONFIG;
+      }
+      pstr_api_struct->pstr_mem_info[i_idx].ui_size += drc_config_size_expected;
+    }
     ptr_out_cfg->mem_info_table[i_idx].ui_size = pstr_api_struct->pstr_mem_info[i_idx].ui_size;
     ptr_out_cfg->mem_info_table[i_idx].ui_alignment =
         pstr_api_struct->pstr_mem_info[i_idx].ui_alignment;
@@ -1476,7 +1566,7 @@ static IA_ERRORCODE ixheaace_alloc_and_assign_mem(ixheaace_api_struct *pstr_api_
     pstr_api_struct->pp_mem[i_idx] = pv_value;
 
     if (i_idx == IA_ENHAACPLUSENC_PERSIST_IDX) {
-      WORD32 offset_size = IXHEAACE_GET_SIZE_ALIGNED(sizeof(ixheaace_state_struct), BYTE_ALIGN_8);
+      WORD32 offset_size = IXHEAAC_GET_SIZE_ALIGNED(sizeof(ixheaace_state_struct), BYTE_ALIGN_8);
       WORD8 *p_offset = NULL;
 
       /* Set persistent memory pointer in api obj */
@@ -1493,7 +1583,7 @@ static IA_ERRORCODE ixheaace_alloc_and_assign_mem(ixheaace_api_struct *pstr_api_
 
         offset_size = pstr_usac_config->channels * sizeof(FLOAT32 *);
         p_offset = (WORD8 *)pstr_state->ptr_in_buf +
-                   IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+                   IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
 
         // Input delay
         pstr_state->inp_delay = (FLOAT32 *)(p_offset);
@@ -1504,7 +1594,7 @@ static IA_ERRORCODE ixheaace_alloc_and_assign_mem(ixheaace_api_struct *pstr_api_
                 sizeof(pstr_state->inp_delay[0]), pstr_api_struct->config[0].use_mps) *
             pstr_api_struct->config[0].num_bs_elements;
         memset(pstr_state->inp_delay, 0, inp_delay_size);
-        p_offset += IXHEAACE_GET_SIZE_ALIGNED(inp_delay_size, BYTE_ALIGN_8);
+        p_offset += IXHEAAC_GET_SIZE_ALIGNED(inp_delay_size, BYTE_ALIGN_8);
         if (1 == pstr_usac_config->sbr_enable) {
           if (2 != pstr_usac_config->channels) {
             pstr_api_struct->pstr_state->time_signal = (FLOAT32 *)(p_offset);
@@ -1513,7 +1603,7 @@ static IA_ERRORCODE ixheaace_alloc_and_assign_mem(ixheaace_api_struct *pstr_api_
                    (MAX_INPUT_SAMPLES) * sizeof(pstr_api_struct->pstr_state->time_signal[0]));
             offset_size =
                 (MAX_INPUT_SAMPLES) * sizeof(pstr_api_struct->pstr_state->time_signal[0]);
-            p_offset += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+            p_offset += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
           }
 
           pstr_api_struct->pstr_state->spectral_band_replication_enc_pers_mem[0] =
@@ -1528,7 +1618,7 @@ static IA_ERRORCODE ixheaace_alloc_and_assign_mem(ixheaace_api_struct *pstr_api_
                  (MAX_INPUT_SAMPLES) * sizeof(pstr_api_struct->pstr_state->time_signal_mps[0]));
           offset_size =
               (MAX_INPUT_SAMPLES) * sizeof(pstr_api_struct->pstr_state->time_signal_mps[0]);
-          p_offset += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+          p_offset += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
           pstr_api_struct->pstr_state->mps_bs = (UWORD8 *)(p_offset);
 
           memset(pstr_api_struct->pstr_state->mps_bs, 0,
@@ -1536,23 +1626,23 @@ static IA_ERRORCODE ixheaace_alloc_and_assign_mem(ixheaace_api_struct *pstr_api_
 
           offset_size =
               (MAX_MPS_BS_PAYLOAD_SIZE) * sizeof(pstr_api_struct->pstr_state->mps_bs[0]);
-          p_offset += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+          p_offset += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
 
           pstr_api_struct->pstr_state->mps_pers_mem = (ixheaace_mps_212_memory_struct *)p_offset;
           p_offset +=
-              IXHEAACE_GET_SIZE_ALIGNED(sizeof(ixheaace_mps_212_memory_struct), BYTE_ALIGN_8);
+              IXHEAAC_GET_SIZE_ALIGNED(sizeof(ixheaace_mps_212_memory_struct), BYTE_ALIGN_8);
         } else {
           pstr_api_struct->pstr_state->mps_bs = NULL;
         }
         if (1 == pstr_usac_config->use_drc_element) {
           pstr_state->pp_drc_in_buf = (FLOAT32 **)((WORD8 *)p_offset);
           offset_size = pstr_usac_config->channels * sizeof(pstr_state->pp_drc_in_buf[0]);
-          p_offset += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+          p_offset += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
           p_temp = p_offset;
 
           for (i = 0; i < pstr_usac_config->channels; i++) {
             pstr_state->pp_drc_in_buf[i] = (FLOAT32 *)(p_offset);
-            p_offset += IXHEAACE_GET_SIZE_ALIGNED(
+            p_offset += IXHEAAC_GET_SIZE_ALIGNED(
                 (pstr_usac_config->drc_frame_size * sizeof(pstr_state->pp_drc_in_buf[0][0]) * 2),
                 BYTE_ALIGN_8);
           }
@@ -1562,34 +1652,33 @@ static IA_ERRORCODE ixheaace_alloc_and_assign_mem(ixheaace_api_struct *pstr_api_
 
         for (i = 0; i < pstr_usac_config->channels; i++) {
           pstr_state->ptr_in_buf[i] = (FLOAT32 *)(p_offset);
-          p_offset += IXHEAACE_GET_SIZE_ALIGNED((pstr_usac_config->ccfl * sizeof(FLOAT32) * 2),
+          p_offset += IXHEAAC_GET_SIZE_ALIGNED((pstr_usac_config->ccfl * sizeof(FLOAT32) * 2),
                                                 BYTE_ALIGN_8);
         }
         memset(p_temp, 0, (p_offset - p_temp));
 
         p_temp = p_offset;
-        offset_size = 0;
         for (i = 0; i < pstr_usac_config->channels; i++) {
           pstr_usac_enc_data->ptr_time_data[i] = (FLOAT64 *)(p_offset);
-          p_offset += IXHEAACE_GET_SIZE_ALIGNED((2 * (pstr_usac_config->ccfl) * sizeof(FLOAT64)),
+          p_offset += IXHEAAC_GET_SIZE_ALIGNED((2 * (pstr_usac_config->ccfl) * sizeof(FLOAT64)),
                                                 BYTE_ALIGN_8);
         }
 
         for (i = 0; i < pstr_usac_config->channels; i++) {
           pstr_usac_enc_data->ptr_look_ahead_time_data[i] = (FLOAT64 *)(p_offset);
           p_offset +=
-              IXHEAACE_GET_SIZE_ALIGNED((pstr_usac_config->ccfl * sizeof(FLOAT64)), BYTE_ALIGN_8);
+              IXHEAAC_GET_SIZE_ALIGNED((pstr_usac_config->ccfl * sizeof(FLOAT64)), BYTE_ALIGN_8);
         }
 
         for (i = 0; i < pstr_usac_config->channels; i++) {
           pstr_usac_enc_data->spectral_line_vector[i] = (FLOAT64 *)(p_offset);
-          p_offset += IXHEAACE_GET_SIZE_ALIGNED((2 * pstr_usac_config->ccfl * sizeof(FLOAT64)),
+          p_offset += IXHEAAC_GET_SIZE_ALIGNED((2 * pstr_usac_config->ccfl * sizeof(FLOAT64)),
                                                 BYTE_ALIGN_8);
         }
 
         for (i = 0; i < pstr_usac_config->channels; i++) {
           pstr_usac_enc_data->ptr_2frame_time_data[i] = (FLOAT64 *)(p_offset);
-          p_offset += IXHEAACE_GET_SIZE_ALIGNED((3 * pstr_usac_config->ccfl * sizeof(FLOAT64)),
+          p_offset += IXHEAAC_GET_SIZE_ALIGNED((3 * pstr_usac_config->ccfl * sizeof(FLOAT64)),
                                                 BYTE_ALIGN_8);
         }
         memset(p_temp, 0, p_offset - p_temp);
@@ -1598,7 +1687,7 @@ static IA_ERRORCODE ixheaace_alloc_and_assign_mem(ixheaace_api_struct *pstr_api_
           p_temp = p_offset;
           for (i = 0; i < pstr_usac_config->channels; i++) {
             pstr_usac_enc_data->pstr_tns_info[i] = (ia_tns_info *)(p_offset);
-            p_offset += IXHEAACE_GET_SIZE_ALIGNED(sizeof(ia_tns_info), BYTE_ALIGN_8);
+            p_offset += IXHEAAC_GET_SIZE_ALIGNED(sizeof(ia_tns_info), BYTE_ALIGN_8);
           }
           memset(p_temp, 0, p_offset - p_temp);
         }
@@ -1606,7 +1695,7 @@ static IA_ERRORCODE ixheaace_alloc_and_assign_mem(ixheaace_api_struct *pstr_api_
         p_temp = p_offset;
         for (i = 0; i < pstr_usac_config->channels; i++) {
           pstr_usac_enc_data->td_encoder[i] = (ia_usac_td_encoder_struct *)(p_offset);
-          p_offset += IXHEAACE_GET_SIZE_ALIGNED(sizeof(ia_usac_td_encoder_struct), BYTE_ALIGN_8);
+          p_offset += IXHEAAC_GET_SIZE_ALIGNED(sizeof(ia_usac_td_encoder_struct), BYTE_ALIGN_8);
         }
         memset(p_temp, 0, p_offset - p_temp);
       } else {
@@ -1622,7 +1711,7 @@ static IA_ERRORCODE ixheaace_alloc_and_assign_mem(ixheaace_api_struct *pstr_api_
                           pstr_api_struct->config[0].use_mps) *
                       pstr_api_struct->config[0].num_bs_elements;
         p_offset = (WORD8 *)pstr_api_struct->pstr_state->inp_delay +
-                   IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+                   IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
 
         if (pstr_api_struct->config[0].use_mps) {
           pstr_api_struct->pstr_state->time_signal_mps = (FLOAT32 *)(p_offset);
@@ -1633,25 +1722,25 @@ static IA_ERRORCODE ixheaace_alloc_and_assign_mem(ixheaace_api_struct *pstr_api_
           offset_size =
               (MAX_INPUT_SAMPLES + (INPUT_DELAY_ELDV2_512 * IXHEAACE_MAX_CH_IN_BS_ELE)) *
               sizeof(pstr_api_struct->pstr_state->time_signal_mps[0]);
-          p_offset += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+          p_offset += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
 
           pstr_api_struct->pstr_state->mps_bs = (UWORD8 *)(p_offset);
           memset(pstr_api_struct->pstr_state->mps_bs, 0,
                  (MAX_MPS_BS_PAYLOAD_SIZE) * sizeof(pstr_api_struct->pstr_state->mps_bs[0]));
           offset_size =
               (MAX_MPS_BS_PAYLOAD_SIZE) * sizeof(pstr_api_struct->pstr_state->mps_bs[0]);
-          p_offset += IXHEAACE_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
+          p_offset += IXHEAAC_GET_SIZE_ALIGNED(offset_size, BYTE_ALIGN_8);
 
           if (pstr_api_struct->config[0].mps_tree_config == TREE_212) {
             pstr_api_struct->pstr_state->mps_pers_mem =
                 (ixheaace_mps_212_memory_struct *)p_offset;
             p_offset +=
-                IXHEAACE_GET_SIZE_ALIGNED(sizeof(ixheaace_mps_212_memory_struct), BYTE_ALIGN_8);
+                IXHEAAC_GET_SIZE_ALIGNED(sizeof(ixheaace_mps_212_memory_struct), BYTE_ALIGN_8);
           } else {
             pstr_api_struct->pstr_state->mps_515_pers_mem =
                 (ixheaace_mps_515_memory_struct *)p_offset;
             p_offset +=
-                IXHEAACE_GET_SIZE_ALIGNED(sizeof(ixheaace_mps_515_memory_struct), BYTE_ALIGN_8);
+                IXHEAAC_GET_SIZE_ALIGNED(sizeof(ixheaace_mps_515_memory_struct), BYTE_ALIGN_8);
           }
         } else {
           pstr_api_struct->pstr_state->mps_bs = NULL;
@@ -1701,6 +1790,138 @@ static IA_ERRORCODE ixheaace_alloc_and_assign_mem(ixheaace_api_struct *pstr_api_
   }
   return err_code;
 }
+
+static VOID ixheaace_write_audio_preroll_data(ixheaace_api_struct *pstr_api_struct,
+                                              ia_bit_buf_struct *it_bit_buff) {
+  ixheaace_config_struct *pstr_config = &pstr_api_struct->config[0];
+  ixheaace_state_struct *pstr_enc_state = pstr_api_struct->pstr_state;
+  ia_usac_data_struct *pstr_usac_data = &pstr_enc_state->str_usac_enc_data;
+  ia_usac_encoder_config_struct *pstr_usac_config = &pstr_config->usac_config;
+  WORD32 i, j, padding_bits;
+
+  if (pstr_usac_config->is_ipf) {
+    if (pstr_usac_config->iframes_interval == pstr_usac_config->num_preroll_frames) {
+      WORD32 config_len = 0, num_bits = 0, au_len = 0, config_bits = 0;
+      WORD32 bytes_to_write;
+      UWORD8 *ptr_out = (UWORD8 *)pstr_api_struct->pp_mem[IA_MEMTYPE_OUTPUT];
+      WORD32 max_output_size =
+          ((MAX_CHANNEL_BITS / BYTE_NUMBIT) * pstr_usac_config->channels) * MAX_PREROLL_FRAMES +
+          MAX_PREROLL_CONFIG_SIZE;
+      UWORD8 *out_data = ptr_out + max_output_size;
+      UWORD8 residual_bits = 0, residual_data = 0;
+      memmove(ptr_out + max_output_size, ptr_out, pstr_enc_state->i_out_bytes);
+      pstr_usac_config->is_ipf = 0;
+
+      config_bits = ixheaace_get_usac_config_bytes(NULL, &pstr_enc_state->audio_specific_config,
+                                                   pstr_config->ccfl_idx);
+      config_len = (config_bits + 7) >> 3;
+      num_bits = iusace_write_escape_value(NULL, config_len, 4, 4, 8);
+      num_bits += (config_len * 8);  // config data bits
+      num_bits++;                    // apply-crossfade
+      num_bits++;                    // apr-reserved
+      // bits for number of preroll frames
+      num_bits += iusace_write_escape_value(NULL, pstr_usac_config->num_preroll_frames, 2, 4, 0);
+      // bits for au_len
+      for (i = 0; i < pstr_usac_config->num_preroll_frames; i++) {
+        num_bits += iusace_write_escape_value(NULL, pstr_usac_data->prev_out_bytes[i], 16, 16, 0);
+        au_len += pstr_usac_data->prev_out_bytes[i];
+      }
+      iusace_reset_bit_buffer(it_bit_buff);
+      // total bytes to write
+      bytes_to_write = (num_bits + 7) >> 3;
+      // usacIndependencyFlag
+      iusace_write_bits_buf(it_bit_buff, pstr_usac_data->usac_independency_flag, 1);
+      iusace_write_bits_buf(it_bit_buff, 1, 1);  // usacExtElementPresent
+      iusace_write_bits_buf(it_bit_buff, 0, 1);  // usacExtElementUseDefaultLength
+
+      if (au_len + bytes_to_write >= MAXIMUM_VALUE_8BIT) {
+        iusace_write_escape_value(it_bit_buff, au_len + bytes_to_write + 2, 8, 16, 0);
+      } else {
+        iusace_write_bits_buf(it_bit_buff, au_len + bytes_to_write, 8);
+      }
+
+      iusace_write_escape_value(it_bit_buff, config_len, 4, 4, 8);  // configLen
+      // Config
+      ixheaace_get_usac_config_bytes(it_bit_buff, &pstr_enc_state->audio_specific_config,
+                                     pstr_config->ccfl_idx);
+
+      if (config_bits % 8) {
+        iusace_write_bits_buf(it_bit_buff, 0, (UWORD8)((config_len << 3) - config_bits));
+      }
+
+      iusace_write_bits_buf(it_bit_buff, 0, 1);  // applyCrossfade
+      iusace_write_bits_buf(it_bit_buff, 0, 1);  // apr_reserved
+      // numPreRollFrames
+      iusace_write_escape_value(it_bit_buff, pstr_usac_config->num_preroll_frames, 2, 4, 0);
+      for (i = 0; i < pstr_usac_config->num_preroll_frames; i++) {
+        au_len = pstr_usac_data->prev_out_bytes[i];
+
+        if (pstr_usac_config->iframes_interval != 0) {
+          out_data = pstr_usac_data->prev_out_data[i];
+        }
+
+        // auLen
+        iusace_write_escape_value(it_bit_buff, au_len, 16, 16, 0);
+
+        // AccessUnit
+        for (j = 0; j < au_len; j++) {
+          iusace_write_bits_buf(it_bit_buff, *out_data, 8);
+          out_data++;
+        }
+      }
+
+      if (num_bits % 8) {
+        iusace_write_bits_buf(it_bit_buff, 0, (UWORD8)((bytes_to_write << 3) - num_bits));
+      }
+      // current frame
+      au_len = pstr_enc_state->i_out_bits >> 3;
+      residual_bits = (UWORD8)(pstr_enc_state->i_out_bits - (au_len << 3));
+      out_data = ptr_out + max_output_size;
+      for (j = 0; j < au_len; j++) {
+        iusace_write_bits_buf(it_bit_buff, *out_data, 8);
+        out_data++;
+      }
+      residual_data = *out_data >> (8 - residual_bits);
+      iusace_write_bits_buf(it_bit_buff, residual_data, residual_bits);
+
+      padding_bits = 8 - (it_bit_buff->cnt_bits & 7);
+      if (padding_bits > 0 && padding_bits < 8) {
+        ptr_out[it_bit_buff->cnt_bits >> 3] =
+            (WORD8)((UWORD32)ptr_out[it_bit_buff->cnt_bits >> 3]) & (0xFF << padding_bits);
+      }
+      pstr_enc_state->i_out_bytes = (it_bit_buff->cnt_bits + 7) >> 3;
+      pstr_usac_config->preroll_idx++;
+
+      if (!pstr_usac_config->is_first_frame) {
+        pstr_usac_config->preroll_idx = pstr_usac_config->num_preroll_frames + 1;
+      }
+      if (pstr_usac_config->is_first_frame) {
+        pstr_usac_config->is_first_frame = 0;
+      }
+    } else {
+      if (pstr_usac_config->preroll_idx < pstr_usac_config->num_preroll_frames) {
+        WORD32 *ptr_prev_out_bytes = pstr_usac_data->prev_out_bytes;
+        WORD32 pr_idx = pstr_usac_config->preroll_idx;
+        UWORD8 *ptr_out = (UWORD8 *)pstr_api_struct->pp_mem[IA_MEMTYPE_OUTPUT];
+        ptr_prev_out_bytes[pr_idx] = pstr_enc_state->i_out_bytes;
+        memcpy(pstr_usac_data->prev_out_data[pr_idx++], ptr_out, pstr_enc_state->i_out_bytes);
+        pstr_usac_config->preroll_idx = pr_idx;
+        pstr_enc_state->i_out_bytes = 0;
+      }
+    }
+  } else {
+    for (j = 0; j < pstr_usac_config->num_preroll_frames - 1; j++) {
+      pstr_usac_data->prev_out_bytes[j] = pstr_usac_data->prev_out_bytes[j + 1];
+    }
+    if (pstr_usac_config->num_preroll_frames) {
+      pstr_usac_data->prev_out_bytes[pstr_usac_config->num_preroll_frames - 1] =
+          pstr_enc_state->i_out_bytes;
+    }
+    pstr_usac_config->preroll_idx = pstr_usac_config->num_preroll_frames + 1;
+  }
+  return;
+}
+
 static IA_ERRORCODE ia_usac_enc_init(ixheaace_api_struct *pstr_api_struct, WORD32 ccfl_idx) {
   IA_ERRORCODE error = IA_NO_ERROR;
   WORD32 i = 0;
@@ -1949,28 +2170,39 @@ static IA_ERRORCODE ia_usac_enc_init(ixheaace_api_struct *pstr_api_struct, WORD3
   if (error & IA_FATAL_ERROR) {
     return error;
   }
-
+  pstr_api_struct->pstr_state->str_usac_enc_data.frame_count = 0;
+  pstr_usac_config->is_ipf = 1;
+  pstr_enc_data->stereo_config_index = (pstr_enc_state->mps_enable == 1) ? 2 : 0;
   ia_bit_buf_struct *pstr_ia_asc_bit_buf;
   pstr_ia_asc_bit_buf = iusace_create_bit_buffer(
       &(pstr_api_struct->pstr_state->str_bit_buf), pstr_api_struct->pp_mem[IA_MEMTYPE_OUTPUT],
       pstr_api_struct->pstr_mem_info[IA_MEMTYPE_OUTPUT].ui_size, 1);
   if (pstr_usac_config->sbr_enable) {
-    pstr_api_struct->pstr_state->audio_specific_config.str_usac_config.str_usac_element_config
-        ->stereo_config_index = (pstr_api_struct->pstr_state->mps_enable == 1) ? 2 : 0;
-    pstr_api_struct->pstr_state->audio_specific_config.str_usac_config.str_usac_element_config
-        ->str_usac_sbr_config.bs_inter_tes = pstr_usac_config->sbr_inter_tes_active;
-    pstr_api_struct->pstr_state->audio_specific_config.str_usac_config.str_usac_element_config
-        ->str_usac_sbr_config.bs_pvc = pstr_usac_config->sbr_pvc_active;
-    pstr_api_struct->pstr_state->audio_specific_config.str_usac_config.str_usac_element_config
-        ->str_usac_sbr_config.dflt_header_extra1 = 0;
-    pstr_api_struct->pstr_state->audio_specific_config.str_usac_config.str_usac_element_config
-        ->str_usac_sbr_config.dflt_header_extra2 = 0;
-    pstr_api_struct->pstr_state->audio_specific_config.str_usac_config.str_usac_element_config
-        ->str_usac_sbr_config.dflt_start_freq = 0;
-    pstr_api_struct->pstr_state->audio_specific_config.str_usac_config.str_usac_element_config
-        ->str_usac_sbr_config.dflt_stop_freq = 4;
-    pstr_api_struct->pstr_state->audio_specific_config.str_usac_config.str_usac_element_config
-        ->str_usac_sbr_config.harmonic_sbr = pstr_usac_config->sbr_harmonic;
+    for (UWORD32 idx = 0; idx < pstr_usac_config->num_elements; idx++) {
+      switch (pstr_enc_state->audio_specific_config.str_usac_config.usac_element_type[idx]) {
+        case ID_USAC_SCE:
+        case ID_USAC_CPE:
+          pstr_enc_state->audio_specific_config.str_usac_config.str_usac_element_config[idx]
+              .stereo_config_index = pstr_enc_data->stereo_config_index;
+          pstr_enc_state->audio_specific_config.str_usac_config.str_usac_element_config[idx]
+              .str_usac_sbr_config.bs_inter_tes = pstr_usac_config->sbr_inter_tes_active;
+          pstr_enc_state->audio_specific_config.str_usac_config.str_usac_element_config[idx]
+              .str_usac_sbr_config.bs_pvc = pstr_usac_config->sbr_pvc_active;
+          pstr_enc_state->audio_specific_config.str_usac_config.str_usac_element_config[idx]
+              .str_usac_sbr_config.dflt_header_extra1 = 0;
+          pstr_enc_state->audio_specific_config.str_usac_config.str_usac_element_config[idx]
+              .str_usac_sbr_config.dflt_header_extra2 = 0;
+          pstr_enc_state->audio_specific_config.str_usac_config.str_usac_element_config[idx]
+              .str_usac_sbr_config.dflt_start_freq = 0;
+          pstr_enc_state->audio_specific_config.str_usac_config.str_usac_element_config[idx]
+              .str_usac_sbr_config.dflt_stop_freq = 4;
+          pstr_enc_state->audio_specific_config.str_usac_config.str_usac_element_config[idx]
+              .str_usac_sbr_config.harmonic_sbr = pstr_usac_config->sbr_harmonic;
+          break;
+        default:
+          continue;
+      }
+    }
   }
 
   ixheaace_get_audiospecific_config_bytes(pstr_ia_asc_bit_buf,
@@ -2792,9 +3024,7 @@ static IA_ERRORCODE iusace_process(ixheaace_api_struct *pstr_api_struct) {
   drc_sample = pstr_config->drc_frame_size * pstr_config->channels;
   core_coder_frame_length = pstr_config->ccfl;
   num_ch = pstr_config->channels;
-  usac_independency_flg = !(pstr_usac_data->usac_independency_flag_count %
-                            pstr_usac_data->usac_independency_flag_interval);
-  pstr_usac_data->usac_independency_flag = usac_independency_flg;
+  usac_independency_flg = pstr_usac_data->usac_independency_flag;
   ps_inp_buf = (WORD16 *)pstr_api_struct->pp_mem[IA_MEMTYPE_INPUT];
   pi1_inp_buf = (WORD8 *)pstr_api_struct->pp_mem[IA_MEMTYPE_INPUT];
   ps_out_buf = (WORD8 *)pstr_api_struct->pp_mem[IA_MEMTYPE_OUTPUT];
@@ -2884,6 +3114,10 @@ static IA_ERRORCODE iusace_process(ixheaace_api_struct *pstr_api_struct) {
         time_signal_mps[idx] = (FLOAT32)ps_inp_buf[2 * idx];
         time_signal_mps[num_samples_read / 2 + idx] = (FLOAT32)ps_inp_buf[2 * idx + 1];
       }
+      ixheaace_mps_pstr_struct pstr_mps_enc =
+          (ixheaace_mps_pstr_struct)pstr_api_struct->pstr_mps_212_enc;
+      pstr_mps_enc->ptr_sac_encoder->independency_flag = usac_independency_flg;
+
       error = ixheaace_mps_212_process(pstr_api_struct->pstr_mps_212_enc, time_signal_mps,
                                        num_samples_read, &mps_extension_payload);
       if (error) {
@@ -3273,7 +3507,8 @@ static IA_ERRORCODE iusace_process(ixheaace_api_struct *pstr_api_struct) {
   pstr_api_struct->pstr_state->i_out_bytes =
       (padding_bits > 0 && padding_bits < 8) ? (pstr_it_bit_buff->cnt_bits + padding_bits) >> 3
                                              : pstr_it_bit_buff->cnt_bits >> 3;
-
+  pstr_api_struct->pstr_state->i_out_bits = pstr_it_bit_buff->cnt_bits;
+  ixheaace_write_audio_preroll_data(pstr_api_struct, pstr_it_bit_buff);
   pstr_state->str_usac_enc_data.frame_count++;
   pstr_usac_data->usac_independency_flag_count =
       (pstr_usac_data->usac_independency_flag_count + 1) %
@@ -3313,6 +3548,86 @@ IA_ERRORCODE ixheaace_get_lib_id_strings(pVOID pv_output) {
   return err_code;
 }
 
+static void ixheaace_config_drc_parameters(ixheaace_api_struct *pstr_api_struct,
+                                           ixheaace_input_config *pstr_input_config) {
+  ia_drc_input_config *pstr_drc_cfg;
+  pstr_drc_cfg = (ia_drc_input_config *)pstr_input_config->pv_drc_cfg;
+
+  ia_drc_internal_config *pstr_internal_drc_cfg =
+      &pstr_api_struct->config[0].usac_config.str_internal_drc_cfg;
+
+  ia_drc_loudness_info_set_struct *pstr_enc_loudness_info_set =
+      &pstr_drc_cfg->str_enc_loudness_info_set;
+  ia_drc_loudness_info_set_struct *pstr_enc_internal_loudness_info_set =
+      &pstr_internal_drc_cfg->str_enc_loudness_info_set;
+
+  WORD32 n;
+
+  pstr_enc_loudness_info_set->loudness_info_count =
+      MIN(pstr_enc_internal_loudness_info_set->loudness_info_count, MAX_LOUDNESS_INFO_COUNT);
+
+  for (n = 0; n < pstr_enc_loudness_info_set->loudness_info_count; n++) {
+    memcpy(&pstr_enc_loudness_info_set->str_loudness_info[n],
+           &pstr_enc_internal_loudness_info_set->str_loudness_info[n],
+           sizeof(ia_drc_loudness_info_struct));
+  }
+
+  pstr_enc_loudness_info_set->loudness_info_album_count = MIN(
+      pstr_enc_internal_loudness_info_set->loudness_info_album_count, MAX_LOUDNESS_INFO_COUNT);
+  for (n = 0; n < pstr_enc_loudness_info_set->loudness_info_album_count; n++) {
+    memcpy(&pstr_enc_loudness_info_set->str_loudness_info_album[n],
+           &pstr_enc_internal_loudness_info_set->str_loudness_info_album[n],
+           sizeof(ia_drc_loudness_info_struct));
+  }
+}
+
+static void ixheaace_get_measured_loudness_info(ixheaace_api_struct *pstr_api_struct,
+                                                ixheaace_input_config *pstr_input_config) {
+  ia_drc_input_config *pstr_internal_drc_cfg;
+  if (!pstr_input_config->use_measured_loudness) {
+    pstr_internal_drc_cfg =
+        (ia_drc_input_config *)&pstr_api_struct->config[0].usac_config.str_internal_drc_cfg;
+  } else {
+    pstr_internal_drc_cfg = &pstr_api_struct->config[0].usac_config.str_drc_cfg;
+  }
+  memset(pstr_internal_drc_cfg, 0, sizeof(ia_drc_input_config));
+  ia_drc_uni_drc_config_struct *pstr_uni_drc_config = &pstr_internal_drc_cfg->str_uni_drc_config;
+  ia_drc_loudness_info_set_struct *pstr_enc_loudness_info_set =
+      &pstr_internal_drc_cfg->str_enc_loudness_info_set;
+  {
+    WORD32 n, m;
+    pstr_uni_drc_config->sample_rate_present = 1;
+    pstr_uni_drc_config->loudness_info_set_present = 1;
+    pstr_enc_loudness_info_set->loudness_info_count = 1;
+    pstr_enc_loudness_info_set->loudness_info_count =
+        MIN(pstr_enc_loudness_info_set->loudness_info_count, MAX_LOUDNESS_INFO_COUNT);
+    for (n = 0; n < pstr_enc_loudness_info_set->loudness_info_count; n++) {
+      pstr_enc_loudness_info_set->str_loudness_info[n].drc_set_id = 0;
+      pstr_enc_loudness_info_set->str_loudness_info[n].downmix_id = 0;
+      pstr_enc_loudness_info_set->str_loudness_info[n].sample_peak_level_present = 1;
+      pstr_enc_loudness_info_set->str_loudness_info[n].sample_peak_level =
+          pstr_input_config->sample_peak_level;
+      pstr_enc_loudness_info_set->str_loudness_info[n].true_peak_level_present = 0;
+      pstr_enc_loudness_info_set->str_loudness_info[n].measurement_count = 1;
+      pstr_enc_loudness_info_set->str_loudness_info[n].measurement_count =
+          MIN(pstr_enc_loudness_info_set->str_loudness_info[n].measurement_count,
+              MAX_MEASUREMENT_COUNT);
+
+      for (m = 0; m < pstr_enc_loudness_info_set->str_loudness_info[n].measurement_count; m++) {
+        pstr_enc_loudness_info_set->str_loudness_info[n]
+            .str_loudness_measure[m]
+            .method_definition = pstr_input_config->method_def;
+        pstr_enc_loudness_info_set->str_loudness_info[n].str_loudness_measure[m].method_value =
+            (FLOAT32)pstr_input_config->measured_loudness;
+        pstr_enc_loudness_info_set->str_loudness_info[n]
+            .str_loudness_measure[m]
+            .measurement_system = pstr_input_config->measurement_system;
+        pstr_enc_loudness_info_set->str_loudness_info[n].str_loudness_measure[m].reliability = 3;
+      }
+    }
+  }
+}
+
 IA_ERRORCODE ixheaace_allocate(pVOID pv_input, pVOID pv_output) {
   IA_ERRORCODE err_code = IA_NO_ERROR;
   WORD32 ui_api_size;
@@ -3347,6 +3662,24 @@ IA_ERRORCODE ixheaace_allocate(pVOID pv_input, pVOID pv_output) {
 
   pstr_api_struct = (ixheaace_api_struct *)pstr_output_config->pv_ia_process_api_obj;
   memset(pstr_api_struct, 0, sizeof(*pstr_api_struct));
+
+  if (pstr_input_config->aot == AOT_USAC) {
+    if (pstr_input_config->use_drc_element == 0) {
+      pstr_input_config->use_measured_loudness = 1;
+    } else {
+      pstr_input_config->use_measured_loudness = 0;
+    }
+    ixheaace_get_measured_loudness_info(pstr_api_struct, pstr_input_config);
+
+    if (!pstr_input_config->use_measured_loudness)
+      ixheaace_config_drc_parameters(pstr_api_struct, pstr_input_config);
+
+    if (pstr_input_config->use_measured_loudness) {
+      memcpy(pstr_input_config->pv_drc_cfg, &pstr_api_struct->config[0].usac_config.str_drc_cfg,
+             sizeof(ia_drc_input_config));
+    }
+  }
+
   ixheaace_set_default_config(pstr_api_struct, pstr_input_config);
 
   err_code = ixheaace_set_config_params(pstr_api_struct, pstr_input_config);
@@ -3382,13 +3715,19 @@ IA_ERRORCODE ixheaace_allocate(pVOID pv_input, pVOID pv_output) {
 
   pstr_output_config->malloc_count++;
 
+  if (pstr_input_config->aot == AOT_USAC) {
+    if (pstr_input_config->use_measured_loudness) {
+      pstr_api_struct->config[0].usac_config.use_measured_loudness = 1;
+    }
+  }
+
   ixheaace_fill_mem_tabs(pstr_api_struct, pstr_input_config->aot);
 
-  err_code = ixheaace_alloc_and_assign_mem(pstr_api_struct, pstr_output_config);
+  err_code =
+      ixheaace_alloc_and_assign_mem(pstr_api_struct, pstr_output_config, pstr_input_config);
   if (err_code) {
     return err_code;
   }
-
   return err_code;
 }
 
@@ -3480,9 +3819,7 @@ IA_ERRORCODE ixheaace_init(pVOID pstr_obj_ixheaace, pVOID pv_input, pVOID pv_out
 
       ixheaace_get_audiospecific_config_bytes(pstr_ia_asc_bit_buf,
                                               &pstr_api_struct->pstr_state->audio_specific_config,
-                                              pstr_api_struct->pstr_state->aot
-
-                                              ,
+                                              pstr_api_struct->pstr_state->aot,
                                               pstr_input_config->ccfl_idx);
 
       pstr_api_struct->pstr_state->i_out_bytes = (pstr_ia_asc_bit_buf->cnt_bits + 7) >> 3;
@@ -3616,12 +3953,43 @@ IA_ERRORCODE ixheaace_process(pVOID pstr_obj_ixheaace, pVOID pv_input, pVOID pv_
       error = IA_EXHEAACE_EXE_NONFATAL_QUANTIZATION_INSUFFICIENT_BITRES;
     }
   } else {
-    error = iusace_process(pstr_api_struct);
-    if ((error == IA_NO_ERROR) && (pstr_api_struct->pstr_state->is_quant_spec_zero)) {
-      error = IA_EXHEAACE_EXE_NONFATAL_USAC_QUANTIZATION_SPECTRUM_ZERO;
+    ia_usac_encoder_config_struct *usac_config = &pstr_api_struct->config[0].usac_config;
+    if (usac_config->iframes_interval <= usac_config->num_preroll_frames) {
+      pstr_api_struct->pstr_state->str_usac_enc_data.usac_independency_flag = 1;
+      if (usac_config->iframes_interval == usac_config->num_preroll_frames &&
+          usac_config->is_first_frame == 0) {
+        usac_config->is_ipf = 1;
+      }
+    } else {
+      pstr_api_struct->pstr_state->str_usac_enc_data.usac_independency_flag = 0;
     }
-    if ((error == IA_NO_ERROR) && (pstr_api_struct->pstr_state->is_gain_limited)) {
-      error = IA_EXHEAACE_EXE_NONFATAL_USAC_QUANTIZATION_INSUFFICIENT_BITRES;
+    if (pstr_api_struct->pstr_state->str_usac_enc_data.frame_count >
+        usac_config->num_preroll_frames) {
+      if (usac_config->iframes_interval <= usac_config->num_preroll_frames) {
+        pstr_api_struct->pstr_state->str_usac_enc_data.usac_independency_flag = 1;
+      } else {
+        pstr_api_struct->pstr_state->str_usac_enc_data.usac_independency_flag = 0;
+      }
+    }
+
+    {
+      error = iusace_process(pstr_api_struct);
+      if (error & IA_FATAL_ERROR) {
+        pstr_output_config->i_out_bytes = 0;
+        return error;
+      }
+      if ((error == IA_NO_ERROR) && (pstr_api_struct->pstr_state->is_quant_spec_zero)) {
+        error = IA_EXHEAACE_EXE_NONFATAL_USAC_QUANTIZATION_SPECTRUM_ZERO;
+      }
+      if ((error == IA_NO_ERROR) && (pstr_api_struct->pstr_state->is_gain_limited)) {
+        error = IA_EXHEAACE_EXE_NONFATAL_USAC_QUANTIZATION_INSUFFICIENT_BITRES;
+      }
+    }
+
+    usac_config->iframes_interval++;
+    if (usac_config->iframes_interval ==
+        (usac_config->random_access_interval - usac_config->num_preroll_frames)) {
+      usac_config->iframes_interval = 0;
     }
   }
   pstr_output_config->i_out_bytes = pstr_api_struct->pstr_state->i_out_bytes;

@@ -96,6 +96,10 @@ typedef struct {
   iusace_scratch_mem str_scratch;
   WORD32 min_bits_needed;
   WORD32 num_drc_bits;
+  WORD32 use_acelp_only;
+  WORD32 prev_out_bytes[MAX_PREROLL_FRAMES];
+  UWORD8 prev_out_data[MAX_PREROLL_FRAMES][MAX_OUTPUT_BYTES_PER_CH * IXHEAACE_MAX_CH_IN_BS_ELE];
+  UWORD32 stereo_config_index;
 } ia_usac_data_struct;
 
 typedef struct {

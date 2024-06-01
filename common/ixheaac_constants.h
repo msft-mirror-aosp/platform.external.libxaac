@@ -83,4 +83,9 @@
 #define C76 (0.5339693427f)   //(sin(u) - 2 * sin(2 * u) - sin(3 * u)) / 3;
 #define C77 (-0.8748422265f)  //(sin(u) + sin(2 * u) + 2 * sin(3 * u)) / 3;
 
+#define BYTE_ALIGN_8 (8)
+#define IXHEAAC_GET_SIZE_ALIGNED(size, alignment) ((size + (alignment - 1)) & ~(alignment - 1))
+#define IXHEAAC_GET_SIZE_ALIGNED_TYPE(num_ele, ele_size, alignment) \
+  ((((num_ele * ele_size) + (alignment - 1)) & ~(alignment - 1)) / ele_size)
+
 #endif /* IXHEAAC_CONSTANTS_H */
