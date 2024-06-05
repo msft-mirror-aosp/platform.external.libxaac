@@ -73,6 +73,7 @@
 #define SPLIT_CHARACTERISTIC_COUNT_MAX 8       /* reduced size */
 #define SHAPE_FILTER_COUNT_MAX 8               /* reduced size */
 #define ADDITIONAL_DOWNMIX_ID_COUNT_MAX MAX_ADDITIONAL_DOWNMIX_ID
+#define MAX_TARGET_LAYOUT_COUNT 127
 #define ADDITIONAL_DRC_SET_ID_COUNT_MAX 16
 #define ADDITIONAL_EQ_SET_ID_COUNT_MAX 8
 #define LOUD_EQ_GAIN_MAX_SEQUENCE_COUNT 4
@@ -110,6 +111,7 @@
 #define COMPLEXITY_W_PARAM_LIM_FILT 4.5f
 #define COMPLEXITY_W_PARAM_DRC_ATTACK 136.0f
 
+#define MAX_DRC_SET_ID (63)
 #define MAX_DRC_LOCATION (4)
 #define MIN_DRC_TARGET_LOUDNESS (-63)
 #define MAX_ATTENUATION_SCALING (1.875f)
@@ -130,6 +132,8 @@
 #define MIN_METHOD_VALUE (-116.0f)
 #define MAX_METHOD_VALUE (121.0f)
 #define MAX_FLT_VAL_DB (770.6367883810890080451095799195f)
+#define DEFAULT_METHOD_VALUE (-31.0f)
+#define DEFAULT_SAMPLE_PEAK_VALUE (-31.0f)
 
 typedef struct {
   WORD32 level_estim_k_weighting_type;
@@ -583,7 +587,7 @@ typedef struct {
   WORD32 uni_drc_config_ext_present;
   ia_drc_uni_drc_config_ext_struct str_uni_drc_config_ext;
   ia_drc_coefficients_basic_struct str_drc_coefficients_basic[MAX_DRC_COEFF_COUNT];
-  ia_drc_instructions_basic_struct str_drc_instructions_basic[MAX_DRC_INSTRUCTIONS_COUNT];
+  ia_drc_instructions_basic_struct str_drc_instructions_basic[MAX_DRC_INSTRUCTIONS_BASIC_COUNT];
   ia_drc_coefficients_uni_drc_struct str_drc_coefficients_uni_drc[MAX_DRC_COEFF_COUNT];
   ia_drc_instructions_uni_drc str_drc_instructions_uni_drc[MAX_DRC_INSTRUCTIONS_COUNT];
   ia_drc_channel_layout_struct str_channel_layout;
