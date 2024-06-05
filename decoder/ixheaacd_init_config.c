@@ -22,8 +22,8 @@
 #include <stdarg.h>
 #include <assert.h>
 
-#include "ixheaacd_type_def.h"
-#include "ixheaacd_constants.h"
+#include "ixheaac_type_def.h"
+#include "ixheaac_constants.h"
 #include "ixheaacd_bitbuffer.h"
 
 #include "ixheaacd_defines.h"
@@ -69,7 +69,7 @@
 #include "ixheaacd_interface.h"
 #include "ixheaacd_info.h"
 #include "ixheaacd_struct.h"
-#include "ixheaacd_error_standards.h"
+#include "ixheaac_error_standards.h"
 
 #include "ixheaacd_error_codes.h"
 
@@ -643,6 +643,9 @@ WORD32 ixheaacd_config(ia_bit_buf_struct *it_bit_buff, ia_usac_config_struct *ps
                                5, 8, 16);
     if (BS_MAX_NUM_OUT_CHANNELS < pstr_usac_conf->num_out_channels) {
       return IA_XHEAAC_DEC_INIT_FATAL_STREAM_CHAN_GT_MAX;
+    }
+    if (pstr_usac_conf->num_out_channels < 1) {
+      return IA_XHEAAC_DEC_INIT_FATAL_DEC_INIT_FAIL;
     }
     for (i = 0; i < pstr_usac_conf->num_out_channels; i++)
       pstr_usac_conf->output_channel_pos[i] =

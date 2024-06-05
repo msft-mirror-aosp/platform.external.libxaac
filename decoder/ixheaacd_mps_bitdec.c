@@ -18,14 +18,14 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include <string.h>
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 #include "ixheaacd_mps_struct_def.h"
 #include "ixheaacd_error_codes.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_mps_res_rom.h"
 #include "ixheaacd_mps_aac_struct.h"
 #include "ixheaacd_mps_res_channel.h"
-#include "ixheaacd_constants.h"
+#include "ixheaac_constants.h"
 #include "ixheaacd_cnst.h"
 #include "ixheaacd_common_rom.h"
 #include "ixheaacd_sbrdecsettings.h"
@@ -35,7 +35,7 @@
 #include "ixheaacd_hybrid.h"
 #include "ixheaacd_ps_dec.h"
 #include "ixheaacd_mps_polyphase.h"
-#include "ixheaacd_error_standards.h"
+#include "ixheaac_error_standards.h"
 #include "ixheaacd_config.h"
 #include "ixheaacd_qmf_dec.h"
 #include "ixheaacd_mps_dec.h"
@@ -45,7 +45,33 @@
 #include "ixheaacd_mps_bitdec.h"
 #include "ixheaacd_mps_res_tns.h"
 #include "ixheaacd_mps_mdct_2_qmf.h"
-#include "ixheaacd_sbr_const.h"
+#include "ixheaac_sbr_const.h"
+
+static const WORD32 ixheaacd_freq_res_table[] = {0, 28, 20, 14, 10, 7, 5, 4};
+
+static WORD32 ixheaacd_bound_check(WORD32 var, WORD32 lower_bound, WORD32 upper_bound) {
+  var = min(var, upper_bound);
+  var = max(var, lower_bound);
+  return var;
+}
+
+static VOID ixheaacd_mps_check_index_bounds(
+    WORD32 output_idx_data[][MAX_PARAMETER_SETS][MAX_PARAMETER_BANDS],
+    WORD32 num_parameter_sets, WORD32 start_band, WORD32 stop_band,
+    WORD32 param_type, WORD32 xtt_idx) {
+  WORD32 i, band;
+  for (i = 0; i < num_parameter_sets; i++) {
+    for (band = start_band; band < stop_band; band++) {
+      if (param_type == CLD) {
+        output_idx_data[xtt_idx][i][band] =
+          ixheaacd_bound_check(output_idx_data[xtt_idx][i][band], -15, 15);
+      } else if (param_type == ICC) {
+        output_idx_data[xtt_idx][i][band] =
+        ixheaacd_bound_check(output_idx_data[xtt_idx][i][band], 0, 7);
+      }
+    }
+  }
+}
 
 static IA_ERRORCODE ixheaacd_parse_extension_config(
     ia_mps_spatial_bs_config_struct *config, WORD32 num_ott_boxes, WORD32 num_ttt_boxes,
@@ -78,12 +104,19 @@ static IA_ERRORCODE ixheaacd_parse_extension_config(
         config->bs_residual_coding = 1;
         temp = ixheaacd_read_bits_buf(it_bit_buff, 6);
         config->bs_residual_sampling_freq_index = (temp >> 2) & FOUR_BIT_MASK;
+        if (config->bs_residual_sampling_freq_index > MAX_RES_SAMP_FREQ_IDX) {
+          return IA_FATAL_ERROR;
+        }
         config->bs_residual_frames_per_spatial_frame = temp & TWO_BIT_MASK;
 
         for (i = 0; i < num_ott_boxes + num_ttt_boxes; i++) {
           config->bs_residual_present[i] = ixheaacd_read_bits_buf(it_bit_buff, 1);
           if (config->bs_residual_present[i]) {
             config->bs_residual_bands[i] = ixheaacd_read_bits_buf(it_bit_buff, 5);
+            if (config->bs_residual_bands[i] > MAX_PARAMETER_BANDS)
+            {
+              return IA_FATAL_ERROR;
+            }
           }
         }
         break;
@@ -93,9 +126,16 @@ static IA_ERRORCODE ixheaacd_parse_extension_config(
 
         temp = ixheaacd_read_bits_buf(it_bit_buff, 11);
         config->bs_arbitrary_downmix_residual_sampling_freq_index = (temp >> 7) & FOUR_BIT_MASK;
+        if (config->bs_arbitrary_downmix_residual_sampling_freq_index > MAX_RES_SAMP_FREQ_IDX) {
+          return IA_FATAL_ERROR;
+        }
         config->bs_arbitrary_downmix_residual_frames_per_spatial_frame =
             (temp >> 5) & TWO_BIT_MASK;
         config->bs_arbitrary_downmix_residual_bands = temp & FIVE_BIT_MASK;
+        if (config->bs_arbitrary_downmix_residual_bands >=
+            ixheaacd_freq_res_table[config->bs_freq_res]) {
+          return IA_FATAL_ERROR;
+        }
 
         break;
 
@@ -116,6 +156,7 @@ static IA_ERRORCODE ixheaacd_parse_extension_config(
               tmp_open--;
             }
             if (config->num_ott_boxes_at >= 56) return IA_FATAL_ERROR;
+            if (config->num_out_chan_at > MAX_OUTPUT_CHANNELS_AT_MPS) return IA_FATAL_ERROR;
             idx++;
             if (idx >= MAX_ARBITRARY_TREE_INDEX) return IA_FATAL_ERROR;
           }
@@ -226,6 +267,9 @@ IA_ERRORCODE ixheaacd_parse_specific_config(ia_heaac_mps_state_struct *pstr_mps_
   config->bs_fixed_gain_dmx = (temp >> 6) & THREE_BIT_MASK;
   config->bs_matrix_mode = (temp >> 5) & ONE_BIT_MASK;
   config->bs_temp_shape_config = (temp >> 3) & TWO_BIT_MASK;
+  if (config->bs_temp_shape_config == 3)
+    return IA_FATAL_ERROR;
+
   config->bs_decorr_config = (temp >> 1) & TWO_BIT_MASK;
   config->bs_3d_audio_mode = (temp)&ONE_BIT_MASK;
 
@@ -437,6 +481,14 @@ static IA_ERRORCODE ixheaacd_ec_data_dec(ia_heaac_mps_state_struct *pstr_mps_sta
     ll_data->bs_quant_coarse_xxx[param_idx][set_idx] = (temp >> 2) & ONE_BIT_MASK;
     ll_data->bs_freq_res_stride_xxx[param_idx][set_idx] = temp & TWO_BIT_MASK;
 
+    if (set_idx == 7 && bs_data_pair == 1) {
+      if (pstr_mps_state->ec_flag) {
+        bs_data_pair = 0;
+      } else {
+        return IA_FATAL_ERROR;
+      }
+    }
+
     if (ll_data->bs_quant_coarse_xxx[param_idx][set_idx] != old_quant_coarse_xxx) {
       if (old_quant_coarse_xxx) {
         ixheaacd_coarse_2_fine(lastdata[box_idx], datatype, start_band, stop_band - start_band);
@@ -458,6 +510,26 @@ static IA_ERRORCODE ixheaacd_ec_data_dec(ia_heaac_mps_state_struct *pstr_mps_sta
         bs_data_pair, ll_data->bs_quant_coarse_xxx[param_idx][set_idx],
         (!frame->bs_independency_flag || (set_idx > 0)), 0, 1, pstr_mps_state->ec_flag);
     if (error_code != IA_NO_ERROR) return error_code;
+
+    if (datatype == CLD) {
+      WORD32 band;
+      for (i = 0; i < pstr_mps_state->num_parameter_sets; i++) {
+        for (band = start_band; band < stop_band; band++) {
+          if (data[box_idx][i][band] > 15 || data[box_idx][i][band] < -15) {
+            return IA_FATAL_ERROR;
+          }
+        }
+      }
+    } else if (datatype == ICC) {
+      WORD32 band;
+      for (i = 0; i < pstr_mps_state->num_parameter_sets; i++) {
+        for (band = start_band; band < stop_band; band++) {
+          if (data[box_idx][i][band] > 7 || data[box_idx][i][band] < 0) {
+            return IA_FATAL_ERROR;
+          }
+        }
+      }
+    }
 
     for (pb = 0; pb < data_bands; pb++) {
       for (i = a_strides[pb]; i < a_strides[pb + 1]; i++) {
@@ -506,7 +578,7 @@ static WORD32 ixheaacd_decode_icc_diff_code(ia_bit_buf_struct *it_bit_buff) {
   return value;
 }
 
-static VOID ixheaacd_parse_residual_data(ia_heaac_mps_state_struct *pstr_mps_state) {
+static IA_ERRORCODE ixheaacd_parse_residual_data(ia_heaac_mps_state_struct *pstr_mps_state) {
   WORD32 ich, ch;
   WORD32 rfpsf;
   WORD32 ps;
@@ -529,6 +601,7 @@ static VOID ixheaacd_parse_residual_data(ia_heaac_mps_state_struct *pstr_mps_sta
 
   WORD32 *p_res_mdct = pstr_mps_state->array_struct->res_mdct;
   ia_bit_buf_struct *mps_bit_buf = pstr_mps_state->ptr_mps_bit_buff;
+  WORD16 error_code = IA_NO_ERROR;
 
   for (ich = 0; ich < loop_counter; ich++) {
     ch = ich;
@@ -549,8 +622,15 @@ static VOID ixheaacd_parse_residual_data(ia_heaac_mps_state_struct *pstr_mps_sta
       }
       p_mdct_res = p_res_mdct;
       for (rfpsf = 0; rfpsf < residual_frames_per_spatial_frame; rfpsf++) {
-        ixheaacd_res_read_ics(mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info, 1,
-                              aac_tables_ptr, pstr_mps_state->tot_sf_bands_ls);
+        error_code =
+            ixheaacd_res_read_ics(mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info, 1,
+                                  aac_tables_ptr, pstr_mps_state->tot_sf_bands_ls);
+        if (error_code) {
+          if (pstr_mps_state->ec_flag) {
+            pstr_mps_state->frame_ok = 0;
+          } else
+            return error_code;
+        }
         if (1 == pstr_mps_state->p_aac_decoder_channel_info[0]->tns_data.tns_data_present)
           ixheaacd_res_ctns_apply(
               pstr_mps_state->p_aac_decoder_channel_info[0],
@@ -566,8 +646,15 @@ static VOID ixheaacd_parse_residual_data(ia_heaac_mps_state_struct *pstr_mps_sta
         if ((pstr_mps_state->p_aac_decoder_channel_info[0]->ics_info.window_sequence ==
              EIGHT_SHORT_SEQUENCE) &&
             ((upd_qmf == UPD_QMF_18) || (upd_qmf == UPD_QMF_24) || (upd_qmf == UPD_QMF_30))) {
-          ixheaacd_res_read_ics(mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info, 1,
-                                aac_tables_ptr, pstr_mps_state->tot_sf_bands_ls);
+          error_code =
+              ixheaacd_res_read_ics(mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info, 1,
+                                    aac_tables_ptr, pstr_mps_state->tot_sf_bands_ls);
+          if (error_code) {
+            if (pstr_mps_state->ec_flag) {
+              pstr_mps_state->frame_ok = 0;
+            } else
+              return error_code;
+          }
           if (1 == pstr_mps_state->p_aac_decoder_channel_info[0]->tns_data.tns_data_present)
             ixheaacd_res_ctns_apply(
                 pstr_mps_state->p_aac_decoder_channel_info[0],
@@ -583,6 +670,7 @@ static VOID ixheaacd_parse_residual_data(ia_heaac_mps_state_struct *pstr_mps_sta
 
     p_res_mdct += RFX2XMDCTCOEF;
   }
+  return IA_NO_ERROR;
 }
 
 static IA_ERRORCODE ixheaacd_parse_extension_frame(ia_heaac_mps_state_struct *pstr_mps_state) {
@@ -607,20 +695,25 @@ static IA_ERRORCODE ixheaacd_parse_extension_frame(ia_heaac_mps_state_struct *ps
   VOID *free_scratch = pstr_mps_state->mps_scratch_mem_v;
   ia_mps_dec_residual_sfband_info_struct *p_sfband_info_tab = &pstr_mps_state->sfband_info_tab;
   ia_bit_buf_struct *mps_bit_buf = pstr_mps_state->ptr_mps_bit_buff;
+  IA_ERRORCODE error_code = IA_NO_ERROR;
 
   for (ch = 0; ch < 2; ch++) {
     pstr_mps_state->p_aac_decoder_channel_info[ch] = free_scratch;
-    free_scratch = (WORD8 *)free_scratch + sizeof(ia_mps_dec_residual_channel_info_struct);
+    free_scratch =
+        (WORD8 *)free_scratch +
+        IXHEAAC_GET_SIZE_ALIGNED(sizeof(ia_mps_dec_residual_channel_info_struct), BYTE_ALIGN_8);
     pstr_mps_state->p_aac_decoder_dynamic_data_init[ch] = free_scratch;
-    free_scratch = (WORD8 *)free_scratch + sizeof(ia_mps_dec_residual_dynamic_data_struct);
+    free_scratch =
+        (WORD8 *)free_scratch +
+        IXHEAAC_GET_SIZE_ALIGNED(sizeof(ia_mps_dec_residual_dynamic_data_struct), BYTE_ALIGN_8);
     pstr_mps_state->p_aac_decoder_channel_info[ch]->p_scale_factor =
         pstr_mps_state->p_aac_decoder_dynamic_data_init[ch]->a_scale_factor;
     pstr_mps_state->p_aac_decoder_channel_info[ch]->p_code_book =
         pstr_mps_state->p_aac_decoder_dynamic_data_init[ch]->a_code_book;
     pstr_mps_state->p_aac_decoder_channel_info[ch]->p_spectral_coefficient = free_scratch;
-    free_scratch = (WORD8 *)free_scratch + 4096;
+    free_scratch = (WORD8 *)free_scratch + IXHEAAC_GET_SIZE_ALIGNED(4096, BYTE_ALIGN_8);
     pstr_mps_state->p_aac_decoder_channel_info[ch]->p_tns_scratch = free_scratch;
-    free_scratch = (WORD8 *)free_scratch + 4096;
+    free_scratch = (WORD8 *)free_scratch + IXHEAAC_GET_SIZE_ALIGNED(4096, BYTE_ALIGN_8);
     pstr_mps_state->p_aac_decoder_channel_info[ch]->ics_info.frame_length = AAC_FRAME_LENGTH;
     pstr_mps_state->p_aac_decoder_channel_info[ch]->common_window = 0;
   }
@@ -675,7 +768,13 @@ static IA_ERRORCODE ixheaacd_parse_extension_frame(ia_heaac_mps_state_struct *ps
 
       switch (sac_ext_type) {
         case EXT_TYPE_0:
-          ixheaacd_parse_residual_data(pstr_mps_state);
+          error_code = ixheaacd_parse_residual_data(pstr_mps_state);
+          if (error_code) {
+            if (pstr_mps_state->ec_flag) {
+              pstr_mps_state->frame_ok = 0;
+            } else
+              return error_code;
+          }
           break;
 
         case EXT_TYPE_1:
@@ -709,8 +808,15 @@ static IA_ERRORCODE ixheaacd_parse_extension_frame(ia_heaac_mps_state_struct *ps
 
             if (channel_grouping[gr] == 1) {
               for (fr = 0; fr < arbdmx_frames_per_spatial_frame; fr++) {
-                ixheaacd_res_read_ics(mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info, 1,
-                                      aac_tables_ptr, pstr_mps_state->tot_sf_bands_ls);
+                error_code =
+                    ixheaacd_res_read_ics(mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info,
+                                          1, aac_tables_ptr, pstr_mps_state->tot_sf_bands_ls);
+                if (error_code) {
+                  if (pstr_mps_state->ec_flag) {
+                    pstr_mps_state->frame_ok = 0;
+                  } else
+                    return error_code;
+                }
                 if (1 == pstr_mps_state->p_aac_decoder_channel_info[0]->tns_data.tns_data_present)
                   ixheaacd_res_ctns_apply(
                       pstr_mps_state->p_aac_decoder_channel_info[0],
@@ -728,8 +834,15 @@ static IA_ERRORCODE ixheaacd_parse_extension_frame(ia_heaac_mps_state_struct *ps
                      EIGHT_SHORT_SEQUENCE) &&
                     ((arbdmx_upd_qmf == UPD_QMF_18) || (arbdmx_upd_qmf == UPD_QMF_24) ||
                      (arbdmx_upd_qmf == UPD_QMF_30))) {
-                  ixheaacd_res_read_ics(mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info,
-                                        1, aac_tables_ptr, pstr_mps_state->tot_sf_bands_ls);
+                  error_code = ixheaacd_res_read_ics(
+                      mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info, 1, aac_tables_ptr,
+                      pstr_mps_state->tot_sf_bands_ls);
+                  if (error_code) {
+                    if (pstr_mps_state->ec_flag) {
+                      pstr_mps_state->frame_ok = 0;
+                    } else
+                      return error_code;
+                  }
                   if (1 ==
                       pstr_mps_state->p_aac_decoder_channel_info[0]->tns_data.tns_data_present)
                     ixheaacd_res_ctns_apply(
@@ -759,8 +872,15 @@ static IA_ERRORCODE ixheaacd_parse_extension_frame(ia_heaac_mps_state_struct *ps
                   return IA_XHEAAC_MPS_DEC_EXE_FATAL_NONZERO_BIT;
                 }
 
-                ixheaacd_res_read_ics(mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info, 1,
-                                      aac_tables_ptr, pstr_mps_state->tot_sf_bands_ls);
+                error_code =
+                    ixheaacd_res_read_ics(mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info,
+                                          1, aac_tables_ptr, pstr_mps_state->tot_sf_bands_ls);
+                if (error_code) {
+                  if (pstr_mps_state->ec_flag) {
+                    pstr_mps_state->frame_ok = 0;
+                  } else
+                    return error_code;
+                }
 
                 if (1 == pstr_mps_state->p_aac_decoder_channel_info[0]->tns_data.tns_data_present)
                   ixheaacd_res_ctns_apply(
@@ -776,8 +896,15 @@ static IA_ERRORCODE ixheaacd_parse_extension_frame(ia_heaac_mps_state_struct *ps
                       (pstr_mps_state->p_aac_decoder_channel_info[0]->p_spectral_coefficient[i]);
                 }
 
-                ixheaacd_res_read_ics(mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info, 1,
-                                      aac_tables_ptr, pstr_mps_state->tot_sf_bands_ls);
+                error_code =
+                    ixheaacd_res_read_ics(mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info,
+                                          1, aac_tables_ptr, pstr_mps_state->tot_sf_bands_ls);
+                if (error_code) {
+                  if (pstr_mps_state->ec_flag) {
+                    pstr_mps_state->frame_ok = 0;
+                  } else
+                    return error_code;
+                }
 
                 if (1 == pstr_mps_state->p_aac_decoder_channel_info[0]->tns_data.tns_data_present)
                   ixheaacd_res_ctns_apply(
@@ -802,8 +929,15 @@ static IA_ERRORCODE ixheaacd_parse_extension_frame(ia_heaac_mps_state_struct *ps
                     return IA_XHEAAC_MPS_DEC_EXE_FATAL_NONZERO_BIT;
                   }
 
-                  ixheaacd_res_read_ics(mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info,
-                                        1, aac_tables_ptr, pstr_mps_state->tot_sf_bands_ls);
+                  error_code = ixheaacd_res_read_ics(
+                      mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info, 1, aac_tables_ptr,
+                      pstr_mps_state->tot_sf_bands_ls);
+                  if (error_code) {
+                    if (pstr_mps_state->ec_flag) {
+                      pstr_mps_state->frame_ok = 0;
+                    } else
+                      return error_code;
+                  }
 
                   if (1 ==
                       pstr_mps_state->p_aac_decoder_channel_info[0]->tns_data.tns_data_present)
@@ -818,8 +952,15 @@ static IA_ERRORCODE ixheaacd_parse_extension_frame(ia_heaac_mps_state_struct *ps
                                          ->p_spectral_coefficient[i]);
                   }
 
-                  ixheaacd_res_read_ics(mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info,
-                                        1, aac_tables_ptr, pstr_mps_state->tot_sf_bands_ls);
+                  error_code = ixheaacd_res_read_ics(
+                      mps_bit_buf, pstr_mps_state->p_aac_decoder_channel_info, 1, aac_tables_ptr,
+                      pstr_mps_state->tot_sf_bands_ls);
+                  if (error_code) {
+                    if (pstr_mps_state->ec_flag) {
+                      pstr_mps_state->frame_ok = 0;
+                    } else
+                      return error_code;
+                  }
 
                   if (1 ==
                       pstr_mps_state->p_aac_decoder_channel_info[0]->tns_data.tns_data_present)
@@ -844,10 +985,11 @@ static IA_ERRORCODE ixheaacd_parse_extension_frame(ia_heaac_mps_state_struct *ps
 
         case EXT_TYPE_2:
           for (i = 0; i < p_bs_config->num_ott_boxes_at; i++) {
-            ixheaacd_ec_data_dec(pstr_mps_state, &frame->cld_lossless_data,
-                                 frame->cmp_ott_cld_idx, frame->cmp_ott_cld_idx_prev, CLD,
-                                 num_ott_boxes + i, num_ott_boxes + i, 0,
-                                 p_bs_config->bs_ott_bands_at[i]);
+            error_code = ixheaacd_ec_data_dec(pstr_mps_state, &frame->cld_lossless_data,
+                                              frame->cmp_ott_cld_idx, frame->cmp_ott_cld_idx_prev,
+                                              CLD, num_ott_boxes + i, num_ott_boxes + i, 0,
+                                              p_bs_config->bs_ott_bands_at[i]);
+            if (error_code != IA_NO_ERROR) return error_code;
           }
 
           break;
@@ -899,6 +1041,7 @@ IA_ERRORCODE ixheaacd_parse_frame(ia_heaac_mps_state_struct *pstr_mps_state) {
 
   WORD32 reciprocal, alignment_bits = 0;
   ia_bit_buf_struct *mps_bit_buf = pstr_mps_state->ptr_mps_bit_buff;
+  IA_ERRORCODE error_code = IA_NO_ERROR;
 
   if (pstr_mps_state->parse_next_bitstream_frame == 0) return IA_NO_ERROR;
 
@@ -929,17 +1072,23 @@ IA_ERRORCODE ixheaacd_parse_frame(ia_heaac_mps_state_struct *pstr_mps_state) {
   frame->bs_independency_flag = ixheaacd_read_bits_buf(mps_bit_buf, 1);
 
   for (i = 0; i < num_ott_boxes; i++) {
-    ixheaacd_ec_data_dec(pstr_mps_state, &frame->cld_lossless_data, frame->cmp_ott_cld_idx,
-                         frame->cmp_ott_cld_idx_prev, CLD, i, i, 0, b_ott_bands[i]);
+    error_code =
+        ixheaacd_ec_data_dec(pstr_mps_state, &frame->cld_lossless_data, frame->cmp_ott_cld_idx,
+                             frame->cmp_ott_cld_idx_prev, CLD, i, i, 0, b_ott_bands[i]);
+    if (error_code != IA_NO_ERROR) return error_code;
   }
   if (pstr_mps_state->one_icc) {
-    ixheaacd_ec_data_dec(pstr_mps_state, &frame->icc_lossless_data, frame->cmp_ott_icc_idx,
-                         frame->cmp_ott_icc_idx_prev, ICC, 0, 0, 0, bitstream_parameter_bands);
+    error_code = ixheaacd_ec_data_dec(pstr_mps_state, &frame->icc_lossless_data,
+                                      frame->cmp_ott_icc_idx, frame->cmp_ott_icc_idx_prev, ICC, 0,
+                                      0, 0, bitstream_parameter_bands);
+    if (error_code != IA_NO_ERROR) return error_code;
   } else {
     for (i = 0; i < num_ott_boxes; i++) {
       if (!pstr_mps_state->ott_mode_lfe[i]) {
-        ixheaacd_ec_data_dec(pstr_mps_state, &frame->icc_lossless_data, frame->cmp_ott_icc_idx,
-                             frame->cmp_ott_icc_idx_prev, ICC, i, i, 0, b_ott_bands[i]);
+        error_code = ixheaacd_ec_data_dec(pstr_mps_state, &frame->icc_lossless_data,
+                                          frame->cmp_ott_icc_idx, frame->cmp_ott_icc_idx_prev,
+                                          ICC, i, i, 0, b_ott_bands[i]);
+        if (error_code != IA_NO_ERROR) return error_code;
       }
     }
   }
@@ -947,53 +1096,79 @@ IA_ERRORCODE ixheaacd_parse_frame(ia_heaac_mps_state_struct *pstr_mps_state) {
   ttt_off = num_ott_boxes;
   for (i = 0; i < pstr_mps_state->num_ttt_boxes; i++) {
     if (p_aux_struct->ttt_config[0][i].mode < 2) {
-      ixheaacd_ec_data_dec(pstr_mps_state, &frame->cpc_lossless_data, frame->cmp_ttt_cpc_1_idx,
-                           frame->cmp_ttt_cpc_1_idx_prev, CPC, i, ttt_off + 4 * i,
-                           p_aux_struct->ttt_config[0][i].bitstream_start_band,
-                           p_aux_struct->ttt_config[0][i].bitstream_stop_band);
-      ixheaacd_ec_data_dec(pstr_mps_state, &frame->cpc_lossless_data, frame->cmp_ttt_cpc_2_idx,
-                           frame->cmp_ttt_cpc_2_idx_prev, CPC, i, ttt_off + 4 * i + 1,
-                           p_aux_struct->ttt_config[0][i].bitstream_start_band,
-                           p_aux_struct->ttt_config[0][i].bitstream_stop_band);
-      ixheaacd_ec_data_dec(pstr_mps_state, &frame->icc_lossless_data, frame->cmp_ttt_icc_idx,
-                           frame->cmp_ttt_icc_idx_prev, ICC, i, ttt_off + 4 * i,
-                           p_aux_struct->ttt_config[0][i].bitstream_start_band,
-                           p_aux_struct->ttt_config[0][i].bitstream_stop_band);
+      error_code = ixheaacd_ec_data_dec(pstr_mps_state, &frame->cpc_lossless_data,
+                                        frame->cmp_ttt_cpc_1_idx, frame->cmp_ttt_cpc_1_idx_prev,
+                                        CPC, i, ttt_off + 4 * i,
+                                        p_aux_struct->ttt_config[0][i].bitstream_start_band,
+                                        p_aux_struct->ttt_config[0][i].bitstream_stop_band);
+      if (error_code != IA_NO_ERROR) return error_code;
+
+      error_code = ixheaacd_ec_data_dec(pstr_mps_state, &frame->cpc_lossless_data,
+                                        frame->cmp_ttt_cpc_2_idx, frame->cmp_ttt_cpc_2_idx_prev,
+                                        CPC, i, ttt_off + 4 * i + 1,
+                                        p_aux_struct->ttt_config[0][i].bitstream_start_band,
+                                        p_aux_struct->ttt_config[0][i].bitstream_stop_band);
+      if (error_code != IA_NO_ERROR) return error_code;
+
+      error_code =
+          ixheaacd_ec_data_dec(pstr_mps_state, &frame->icc_lossless_data, frame->cmp_ttt_icc_idx,
+                               frame->cmp_ttt_icc_idx_prev, ICC, i, ttt_off + 4 * i,
+                               p_aux_struct->ttt_config[0][i].bitstream_start_band,
+                               p_aux_struct->ttt_config[0][i].bitstream_stop_band);
+      if (error_code != IA_NO_ERROR) return error_code;
     } else {
-      ixheaacd_ec_data_dec(pstr_mps_state, &frame->cld_lossless_data, frame->cmp_ttt_cld_1_idx,
-                           frame->cmp_ttt_cld_1_idx_prev, CLD, i, ttt_off + 4 * i,
-                           p_aux_struct->ttt_config[0][i].bitstream_start_band,
-                           p_aux_struct->ttt_config[0][i].bitstream_stop_band);
-      ixheaacd_ec_data_dec(pstr_mps_state, &frame->cld_lossless_data, frame->cmp_ttt_cld_2_idx,
-                           frame->cmp_ttt_cld_2_idx_prev, CLD, i, ttt_off + 4 * i + 1,
-                           p_aux_struct->ttt_config[0][i].bitstream_start_band,
-                           p_aux_struct->ttt_config[0][i].bitstream_stop_band);
+      error_code = ixheaacd_ec_data_dec(pstr_mps_state, &frame->cld_lossless_data,
+                                        frame->cmp_ttt_cld_1_idx, frame->cmp_ttt_cld_1_idx_prev,
+                                        CLD, i, ttt_off + 4 * i,
+                                        p_aux_struct->ttt_config[0][i].bitstream_start_band,
+                                        p_aux_struct->ttt_config[0][i].bitstream_stop_band);
+      if (error_code != IA_NO_ERROR) return error_code;
+
+      error_code = ixheaacd_ec_data_dec(pstr_mps_state, &frame->cld_lossless_data,
+                                        frame->cmp_ttt_cld_2_idx, frame->cmp_ttt_cld_2_idx_prev,
+                                        CLD, i, ttt_off + 4 * i + 1,
+                                        p_aux_struct->ttt_config[0][i].bitstream_start_band,
+                                        p_aux_struct->ttt_config[0][i].bitstream_stop_band);
+      if (error_code != IA_NO_ERROR) return error_code;
     }
 
     if (p_aux_struct->ttt_config[1][i].bitstream_start_band <
         p_aux_struct->ttt_config[1][i].bitstream_stop_band) {
       if (p_aux_struct->ttt_config[1][i].mode < 2) {
-        ixheaacd_ec_data_dec(pstr_mps_state, &frame->cpc_lossless_data, frame->cmp_ttt_cpc_1_idx,
-                             frame->cmp_ttt_cpc_1_idx_prev, CPC, i, ttt_off + 4 * i + 2,
-                             p_aux_struct->ttt_config[1][i].bitstream_start_band,
-                             p_aux_struct->ttt_config[1][i].bitstream_stop_band);
-        ixheaacd_ec_data_dec(pstr_mps_state, &frame->cpc_lossless_data, frame->cmp_ttt_cpc_2_idx,
-                             frame->cmp_ttt_cpc_2_idx_prev, CPC, i, ttt_off + 4 * i + 3,
-                             p_aux_struct->ttt_config[1][i].bitstream_start_band,
-                             p_aux_struct->ttt_config[1][i].bitstream_stop_band);
-        ixheaacd_ec_data_dec(pstr_mps_state, &frame->icc_lossless_data, frame->cmp_ttt_icc_idx,
-                             frame->cmp_ttt_icc_idx_prev, ICC, i, ttt_off + 4 * i + 2,
-                             p_aux_struct->ttt_config[1][i].bitstream_start_band,
-                             p_aux_struct->ttt_config[1][i].bitstream_stop_band);
+        error_code = ixheaacd_ec_data_dec(pstr_mps_state, &frame->cpc_lossless_data,
+                                          frame->cmp_ttt_cpc_1_idx, frame->cmp_ttt_cpc_1_idx_prev,
+                                          CPC, i, ttt_off + 4 * i + 2,
+                                          p_aux_struct->ttt_config[1][i].bitstream_start_band,
+                                          p_aux_struct->ttt_config[1][i].bitstream_stop_band);
+        if (error_code != IA_NO_ERROR) return error_code;
+
+        error_code = ixheaacd_ec_data_dec(pstr_mps_state, &frame->cpc_lossless_data,
+                                          frame->cmp_ttt_cpc_2_idx, frame->cmp_ttt_cpc_2_idx_prev,
+                                          CPC, i, ttt_off + 4 * i + 3,
+                                          p_aux_struct->ttt_config[1][i].bitstream_start_band,
+                                          p_aux_struct->ttt_config[1][i].bitstream_stop_band);
+        if (error_code != IA_NO_ERROR) return error_code;
+
+        error_code = ixheaacd_ec_data_dec(pstr_mps_state, &frame->icc_lossless_data,
+                                          frame->cmp_ttt_icc_idx, frame->cmp_ttt_icc_idx_prev,
+                                          ICC, i, ttt_off + 4 * i + 2,
+                                          p_aux_struct->ttt_config[1][i].bitstream_start_band,
+                                          p_aux_struct->ttt_config[1][i].bitstream_stop_band);
+        if (error_code != IA_NO_ERROR) return error_code;
       } else {
-        ixheaacd_ec_data_dec(pstr_mps_state, &frame->cld_lossless_data, frame->cmp_ttt_cld_1_idx,
-                             frame->cmp_ttt_cld_1_idx_prev, CLD, i, ttt_off + 4 * i + 2,
-                             p_aux_struct->ttt_config[1][i].bitstream_start_band,
-                             p_aux_struct->ttt_config[1][i].bitstream_stop_band);
-        ixheaacd_ec_data_dec(pstr_mps_state, &frame->cld_lossless_data, frame->cmp_ttt_cld_2_idx,
-                             frame->cmp_ttt_cld_2_idx_prev, CLD, i, ttt_off + 4 * i + 3,
-                             p_aux_struct->ttt_config[1][i].bitstream_start_band,
-                             p_aux_struct->ttt_config[1][i].bitstream_stop_band);
+        error_code = ixheaacd_ec_data_dec(pstr_mps_state, &frame->cld_lossless_data,
+                                          frame->cmp_ttt_cld_1_idx, frame->cmp_ttt_cld_1_idx_prev,
+                                          CLD, i, ttt_off + 4 * i + 2,
+                                          p_aux_struct->ttt_config[1][i].bitstream_start_band,
+                                          p_aux_struct->ttt_config[1][i].bitstream_stop_band);
+        if (error_code != IA_NO_ERROR) return error_code;
+
+        error_code = ixheaacd_ec_data_dec(pstr_mps_state, &frame->cld_lossless_data,
+                                          frame->cmp_ttt_cld_2_idx, frame->cmp_ttt_cld_2_idx_prev,
+                                          CLD, i, ttt_off + 4 * i + 3,
+                                          p_aux_struct->ttt_config[1][i].bitstream_start_band,
+                                          p_aux_struct->ttt_config[1][i].bitstream_stop_band);
+        if (error_code != IA_NO_ERROR) return error_code;
       }
     }
   }
@@ -1073,7 +1248,14 @@ IA_ERRORCODE ixheaacd_parse_frame(ia_heaac_mps_state_struct *pstr_mps_state) {
   }
 
   ixheaacd_byte_align(mps_bit_buf, &alignment_bits);
-  ixheaacd_parse_extension_frame(pstr_mps_state);
+  error_code = ixheaacd_parse_extension_frame(pstr_mps_state);
+  if (error_code) {
+    if (pstr_mps_state->ec_flag) {
+      pstr_mps_state->frame_ok = 0;
+    }
+    else
+      return error_code;
+  }
 
   for (i = 0; i < num_ott_boxes; i++) {
     for (ps = 0; ps < num_parameter_sets; ps++) {
@@ -1295,9 +1477,12 @@ static IA_ERRORCODE ixheaacd_map_index_data(
   db_1 = ott_vs_tot_db_1;
   db_2 = ott_vs_tot_db_2;
   a_param_slots = scratch;
-  a_interpolate = a_param_slots + MAX_PARAMETER_SETS;
-  a_map = a_interpolate + MAX_PARAMETER_SETS;
-  free_scratch = a_map + MAX_PARAMETER_BANDS_PLUS_1;
+  a_interpolate = a_param_slots + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                      MAX_PARAMETER_SETS, sizeof(*a_interpolate), BYTE_ALIGN_8);
+  a_map = a_interpolate +
+          IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_SETS, sizeof(*a_map), BYTE_ALIGN_8);
+  free_scratch = a_map + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS_PLUS_1, sizeof(*a_map),
+                                                       BYTE_ALIGN_8);
 
   data_sets = 0;
   for (i = 0; i < num_parameter_sets; i++) {
@@ -1442,6 +1627,9 @@ static IA_ERRORCODE ixheaacd_map_index_data(
     }
   }
 
+  ixheaacd_mps_check_index_bounds(output_idx_data, num_parameter_sets, start_band,
+                                  stop_band, param_type, xtt_idx);
+
   if (extend_frame) {
     for (band = start_band; band < stop_band; band++) {
       output_data[xtt_idx][num_parameter_sets][band] =
@@ -1520,8 +1708,10 @@ static VOID ixheaacd_map_data_to_28_bands(
   return;
 }
 
-static VOID ixheaacd_decode_and_map_frame_ott(ia_heaac_mps_state_struct *pstr_mps_state) {
-  ia_mps_dec_spatial_bs_frame_struct *p_cur_bs = pstr_mps_state->bs_frame;
+static IA_ERRORCODE ixheaacd_decode_and_map_frame_ott(ia_heaac_mps_state_struct *pstr_mps_state)
+{
+  IA_ERRORCODE error_code = IA_NO_ERROR;
+  ia_mps_dec_spatial_bs_frame_struct *p_cur_bs;
   ia_heaac_mps_state_struct *curr_state = pstr_mps_state;
   ia_mps_dec_auxilary_struct *p_aux_struct = pstr_mps_state->aux_struct;
   ia_mps_dec_bitdec_tables_struct *bitdec_table =
@@ -1553,16 +1743,23 @@ static VOID ixheaacd_decode_and_map_frame_ott(ia_heaac_mps_state_struct *pstr_mp
   WORD32 quant_mode = curr_state->quant_mode;
 
   tot_db = pstr_mps_state->mps_scratch_mem_v;
-  ott_vs_tot_db_fc = tot_db + MAX_PSXPB;
-  ott_vs_tot_db_s = ott_vs_tot_db_fc + MAX_PSXPB;
-  ott_vs_tot_db_f = ott_vs_tot_db_s + MAX_PSXPB;
-  ott_vs_tot_db_c = ott_vs_tot_db_f + MAX_PSXPB;
-  ott_vs_tot_db_lr = ott_vs_tot_db_c + MAX_PSXPB;
-  ott_vs_tot_db_l = ott_vs_tot_db_lr + MAX_PSXPB;
-  ott_vs_tot_db_r = ott_vs_tot_db_l + MAX_PSXPB;
-  tmp1 = ott_vs_tot_db_r + MAX_PSXPB;
-  tmp2 = tmp1 + MAX_PSXPB;
-  free_scratch = tmp2 + MAX_PSXPB;
+  ott_vs_tot_db_fc =
+      tot_db + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PSXPB, sizeof(*ott_vs_tot_db_fc), BYTE_ALIGN_8);
+  ott_vs_tot_db_s = ott_vs_tot_db_fc + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                           MAX_PSXPB, sizeof(*ott_vs_tot_db_s), BYTE_ALIGN_8);
+  ott_vs_tot_db_f = ott_vs_tot_db_s + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                          MAX_PSXPB, sizeof(*ott_vs_tot_db_f), BYTE_ALIGN_8);
+  ott_vs_tot_db_c = ott_vs_tot_db_f + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                          MAX_PSXPB, sizeof(*ott_vs_tot_db_c), BYTE_ALIGN_8);
+  ott_vs_tot_db_lr = ott_vs_tot_db_c + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                           MAX_PSXPB, sizeof(*ott_vs_tot_db_lr), BYTE_ALIGN_8);
+  ott_vs_tot_db_l = ott_vs_tot_db_lr + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                           MAX_PSXPB, sizeof(*ott_vs_tot_db_l), BYTE_ALIGN_8);
+  ott_vs_tot_db_r = ott_vs_tot_db_l + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                          MAX_PSXPB, sizeof(*ott_vs_tot_db_r), BYTE_ALIGN_8);
+  tmp1 = ott_vs_tot_db_r + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PSXPB, sizeof(*tmp1), BYTE_ALIGN_8);
+  tmp2 = tmp1 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PSXPB, sizeof(*tmp2), BYTE_ALIGN_8);
+  free_scratch = tmp2 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PSXPB, sizeof(*tmp2), BYTE_ALIGN_8);
 
   p_cur_bs = pstr_mps_state->bs_frame;
   num_ott_boxes = curr_state->num_ott_boxes;
@@ -1573,87 +1770,100 @@ static VOID ixheaacd_decode_and_map_frame_ott(ia_heaac_mps_state_struct *pstr_mp
   switch (curr_state->tree_config) {
     case TREE_5151:
       i = 0;
-
-      ixheaacd_map_index_data(
+      error_code = ixheaacd_map_index_data(
           &p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld, p_cur_bs->ott_cld_idx,
           p_cur_bs->cmp_ott_cld_idx, NULL, i, p_cur_bs->ott_cld_idx_prev, i, CLD, 0,
           b_ott_bands[i], ott_cld_default[i], parameter_sets, param_slot, extend_frame,
           quant_mode, tot_db, ott_vs_tot_db_fc, ott_vs_tot_db_s, bitdec_table, free_scratch);
+      if (error_code) return error_code;
 
       i = 1;
-
-      ixheaacd_map_index_data(&p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld,
+      error_code = ixheaacd_map_index_data(&p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld,
                               p_cur_bs->ott_cld_idx, p_cur_bs->cmp_ott_cld_idx, NULL, i,
                               p_cur_bs->ott_cld_idx_prev, i, CLD, 0, b_ott_bands[i],
                               ott_cld_default[i], parameter_sets, param_slot, extend_frame,
                               quant_mode, ott_vs_tot_db_fc, ott_vs_tot_db_f, ott_vs_tot_db_c,
                               bitdec_table, free_scratch);
+      if (error_code) return error_code;
 
       i = 2;
-      ixheaacd_map_index_data(
+      error_code = ixheaacd_map_index_data(
           &p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld, p_cur_bs->ott_cld_idx,
           p_cur_bs->cmp_ott_cld_idx, NULL, i, p_cur_bs->ott_cld_idx_prev, i, CLD, 0,
           b_ott_bands[i], ott_cld_default[i], parameter_sets, param_slot, extend_frame,
           quant_mode, ott_vs_tot_db_s, tmp1, tmp2, bitdec_table, free_scratch);
+      if (error_code) return error_code;
 
       i = 3;
-      ixheaacd_map_index_data(
+      error_code = ixheaacd_map_index_data(
           &p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld, p_cur_bs->ott_cld_idx,
           p_cur_bs->cmp_ott_cld_idx, NULL, i, p_cur_bs->ott_cld_idx_prev, i, CLD, 0,
           b_ott_bands[i], ott_cld_default[i], parameter_sets, param_slot, extend_frame,
           quant_mode, ott_vs_tot_db_f, tmp1, tmp2, bitdec_table, free_scratch);
+      if (error_code) return error_code;
 
       i = 4;
-      ixheaacd_map_index_data(&p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld,
+      error_code = ixheaacd_map_index_data(&p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld,
                               p_cur_bs->ott_cld_idx, p_cur_bs->cmp_ott_cld_idx, NULL, i,
                               p_cur_bs->ott_cld_idx_prev, i, CLD, 0, b_ott_bands[i],
                               ott_cld_default[i], parameter_sets, param_slot, extend_frame,
                               quant_mode, tot_db, tmp1, tmp2, bitdec_table, free_scratch);
+      if (error_code) return error_code;
 
       break;
 
     case TREE_5152:
       i = 0;
-      ixheaacd_map_index_data(
+      error_code = ixheaacd_map_index_data(
           &p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld, p_cur_bs->ott_cld_idx,
           p_cur_bs->cmp_ott_cld_idx, NULL, i, p_cur_bs->ott_cld_idx_prev, i, CLD, 0,
           b_ott_bands[i], ott_cld_default[i], parameter_sets, param_slot, extend_frame,
           quant_mode, tot_db, ott_vs_tot_db_lr, ott_vs_tot_db_c, bitdec_table, free_scratch);
+      if (error_code) return error_code;
+
       i = 1;
-      ixheaacd_map_index_data(&p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld,
+      error_code = ixheaacd_map_index_data(&p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld,
                               p_cur_bs->ott_cld_idx, p_cur_bs->cmp_ott_cld_idx, NULL, i,
                               p_cur_bs->ott_cld_idx_prev, i, CLD, 0, b_ott_bands[i],
                               ott_cld_default[i], parameter_sets, param_slot, extend_frame,
                               quant_mode, ott_vs_tot_db_lr, ott_vs_tot_db_l, ott_vs_tot_db_r,
                               bitdec_table, free_scratch);
+      if (error_code) return error_code;
+
       i = 2;
-      ixheaacd_map_index_data(&p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld,
+      error_code = ixheaacd_map_index_data(&p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld,
                               p_cur_bs->ott_cld_idx, p_cur_bs->cmp_ott_cld_idx, NULL, i,
                               p_cur_bs->ott_cld_idx_prev, i, CLD, 0, b_ott_bands[i],
                               ott_cld_default[i], parameter_sets, param_slot, extend_frame,
                               quant_mode, tot_db, tmp1, tmp2, bitdec_table, free_scratch);
+      if (error_code) return error_code;
+
       i = 3;
-      ixheaacd_map_index_data(
+      error_code = ixheaacd_map_index_data(
           &p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld, p_cur_bs->ott_cld_idx,
           p_cur_bs->cmp_ott_cld_idx, NULL, i, p_cur_bs->ott_cld_idx_prev, i, CLD, 0,
           b_ott_bands[i], ott_cld_default[i], parameter_sets, param_slot, extend_frame,
           quant_mode, ott_vs_tot_db_l, tmp1, tmp2, bitdec_table, free_scratch);
+      if (error_code) return error_code;
+
       i = 4;
-      ixheaacd_map_index_data(
+      error_code = ixheaacd_map_index_data(
           &p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld, p_cur_bs->ott_cld_idx,
           p_cur_bs->cmp_ott_cld_idx, NULL, i, p_cur_bs->ott_cld_idx_prev, i, CLD, 0,
           b_ott_bands[i], ott_cld_default[i], parameter_sets, param_slot, extend_frame,
           quant_mode, ott_vs_tot_db_r, tmp1, tmp2, bitdec_table, free_scratch);
+      if (error_code) return error_code;
       break;
 
     default:
       for (i = 0; i < num_ott_boxes; i++) {
-        ixheaacd_map_index_data(&p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld,
+        error_code = ixheaacd_map_index_data(&p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld,
                                 p_cur_bs->ott_cld_idx, p_cur_bs->cmp_ott_cld_idx, NULL, i,
                                 p_cur_bs->ott_cld_idx_prev, i, CLD, 0, b_ott_bands[i],
                                 ott_cld_default[i], parameter_sets, param_slot, extend_frame,
                                 (curr_state->tree_config == TREE_525) ? 0 : quant_mode, NULL,
                                 NULL, NULL, bitdec_table, free_scratch);
+        if (error_code) return error_code;
       }
       break;
   }
@@ -1677,23 +1887,25 @@ static VOID ixheaacd_decode_and_map_frame_ott(ia_heaac_mps_state_struct *pstr_mp
 
     for (ott_idx = 0; ott_idx < num_ott_boxes; ott_idx++) {
       if (curr_state->ott_mode_lfe[ott_idx] == 0) {
-        ixheaacd_map_index_data(&p_cur_bs->icc_lossless_data, p_aux_struct->ott_icc,
+        error_code = ixheaacd_map_index_data(&p_cur_bs->icc_lossless_data, p_aux_struct->ott_icc,
                                 p_cur_bs->ott_icc_idx, p_cur_bs->cmp_ott_icc_idx,
                                 p_cur_bs->ott_icc_diff_idx, ott_idx, p_cur_bs->ott_icc_idx_prev,
                                 0, ICC, 0, b_ott_bands[ott_idx], curr_state->icc_default,
                                 parameter_sets, param_slot, extend_frame, quant_mode, NULL, NULL,
                                 NULL, bitdec_table, free_scratch);
+        if (error_code) return error_code;
       }
     }
   } else {
     for (ott_idx = 0; ott_idx < num_ott_boxes; ott_idx++) {
       if (curr_state->ott_mode_lfe[ott_idx] == 0) {
-        ixheaacd_map_index_data(&p_cur_bs->icc_lossless_data, p_aux_struct->ott_icc,
+        error_code = ixheaacd_map_index_data(&p_cur_bs->icc_lossless_data, p_aux_struct->ott_icc,
                                 p_cur_bs->ott_icc_idx, p_cur_bs->cmp_ott_icc_idx,
                                 p_cur_bs->ott_icc_diff_idx, ott_idx, p_cur_bs->ott_icc_idx_prev,
                                 ott_idx, ICC, 0, b_ott_bands[ott_idx], curr_state->icc_default,
                                 parameter_sets, param_slot, extend_frame, quant_mode, NULL, NULL,
                                 NULL, bitdec_table, free_scratch);
+        if (error_code) return error_code;
       }
     }
   }
@@ -1714,11 +1926,13 @@ static VOID ixheaacd_decode_and_map_frame_ott(ia_heaac_mps_state_struct *pstr_mp
       }
     }
   }
-  return;
+  return error_code;
 }
 
-static VOID ixheaacd_decode_and_map_frame_ttt(ia_heaac_mps_state_struct *pstr_mps_state) {
-  ia_mps_dec_spatial_bs_frame_struct *p_cur_bs = pstr_mps_state->bs_frame;
+static IA_ERRORCODE ixheaacd_decode_and_map_frame_ttt(ia_heaac_mps_state_struct *pstr_mps_state)
+{
+  IA_ERRORCODE error_code = IA_NO_ERROR;
+  ia_mps_dec_spatial_bs_frame_struct *p_cur_bs;
   ia_mps_dec_bitdec_tables_struct *bitdec_table =
       pstr_mps_state->ia_mps_dec_mps_table.bitdec_table_ptr;
   ia_mps_dec_auxilary_struct *p_aux_struct = pstr_mps_state->aux_struct;
@@ -1742,33 +1956,36 @@ static VOID ixheaacd_decode_and_map_frame_ttt(ia_heaac_mps_state_struct *pstr_mp
          p_aux_struct->ttt_config[j][i].start_band < p_aux_struct->ttt_config[j][i].stop_band;
          j++) {
       if (p_aux_struct->ttt_config[j][i].mode < 2) {
-        ixheaacd_map_index_data(
+        error_code = ixheaacd_map_index_data(
             &p_cur_bs->cpc_lossless_data, p_aux_struct->ttt_cpc_1, p_cur_bs->ttt_cpc_1_idx,
             p_cur_bs->cmp_ttt_cpc_1_idx, NULL, i, p_cur_bs->ttt_cpc_1_idx_prev,
             offset + 4 * i + 2 * j, CPC, p_aux_struct->ttt_config[j][i].bitstream_start_band,
             p_aux_struct->ttt_config[j][i].bitstream_stop_band, pstr_mps_state->cpc_default,
             pstr_mps_state->num_parameter_sets, param_slot, pstr_mps_state->extend_frame,
             pstr_mps_state->quant_mode, NULL, NULL, NULL, bitdec_table, free_scratch);
+        if (error_code) return error_code;
 
-        ixheaacd_map_index_data(
+        error_code = ixheaacd_map_index_data(
             &p_cur_bs->cpc_lossless_data, p_aux_struct->ttt_cpc_2, p_cur_bs->ttt_cpc_2_idx,
             p_cur_bs->cmp_ttt_cpc_2_idx, NULL, i, p_cur_bs->ttt_cpc_2_idx_prev,
             offset + 4 * i + 1 + 2 * j, CPC, p_aux_struct->ttt_config[j][i].bitstream_start_band,
             p_aux_struct->ttt_config[j][i].bitstream_stop_band, pstr_mps_state->cpc_default,
             pstr_mps_state->num_parameter_sets, param_slot, pstr_mps_state->extend_frame,
             pstr_mps_state->quant_mode, NULL, NULL, NULL, bitdec_table, free_scratch);
+        if (error_code) return error_code;
 
-        ixheaacd_map_index_data(
+        error_code = ixheaacd_map_index_data(
             &p_cur_bs->icc_lossless_data, p_aux_struct->ttt_icc, p_cur_bs->ttt_icc_idx,
             p_cur_bs->cmp_ttt_icc_idx, NULL, i, p_cur_bs->ttt_icc_idx_prev,
             offset + 4 * i + 2 * j, ICC, p_aux_struct->ttt_config[j][i].bitstream_start_band,
             p_aux_struct->ttt_config[j][i].bitstream_stop_band, pstr_mps_state->icc_default,
             pstr_mps_state->num_parameter_sets, param_slot, pstr_mps_state->extend_frame,
             pstr_mps_state->quant_mode, NULL, NULL, NULL, bitdec_table, free_scratch);
+        if (error_code) return error_code;
       }
 
       else {
-        ixheaacd_map_index_data(
+        error_code = ixheaacd_map_index_data(
             &p_cur_bs->cld_lossless_data, p_aux_struct->ttt_cld_1, p_cur_bs->ttt_cld_1_idx,
             p_cur_bs->cmp_ttt_cld_1_idx, NULL, i, p_cur_bs->ttt_cld_1_idx_prev,
             offset + 4 * i + 2 * j, CLD, p_aux_struct->ttt_config[j][i].bitstream_start_band,
@@ -1776,8 +1993,9 @@ static VOID ixheaacd_decode_and_map_frame_ttt(ia_heaac_mps_state_struct *pstr_mp
             pstr_mps_state->ttt_cld_1_default[i], pstr_mps_state->num_parameter_sets, param_slot,
             pstr_mps_state->extend_frame, pstr_mps_state->quant_mode, NULL, NULL, NULL,
             bitdec_table, free_scratch);
+        if (error_code) return error_code;
 
-        ixheaacd_map_index_data(
+        error_code = ixheaacd_map_index_data(
             &p_cur_bs->cld_lossless_data, p_aux_struct->ttt_cld_2, p_cur_bs->ttt_cld_2_idx,
             p_cur_bs->cmp_ttt_cld_2_idx, NULL, i, p_cur_bs->ttt_cld_2_idx_prev,
             offset + 4 * i + 1 + 2 * j, CLD, p_aux_struct->ttt_config[j][i].bitstream_start_band,
@@ -1785,6 +2003,7 @@ static VOID ixheaacd_decode_and_map_frame_ttt(ia_heaac_mps_state_struct *pstr_mp
             pstr_mps_state->ttt_cld_2_default[i], pstr_mps_state->num_parameter_sets, param_slot,
             pstr_mps_state->extend_frame, pstr_mps_state->quant_mode, NULL, NULL, NULL,
             bitdec_table, free_scratch);
+        if (error_code) return error_code;
       }
 
       if (pstr_mps_state->up_mix_type == 2) {
@@ -1805,6 +2024,7 @@ static VOID ixheaacd_decode_and_map_frame_ttt(ia_heaac_mps_state_struct *pstr_mp
       }
     }
   }
+  return error_code;
 }
 
 static VOID ixheaacd_decode_and_map_frame_smg(ia_heaac_mps_state_struct *pstr_mps_state) {
@@ -1820,7 +2040,9 @@ static VOID ixheaacd_decode_and_map_frame_smg(ia_heaac_mps_state_struct *pstr_mp
   ia_mps_dec_spatial_bs_frame_struct *frame = pstr_mps_state->bs_frame;
   pstr_mps_state->smooth_control = frame->bs_smooth_control;
   a_group_to_band = pstr_mps_state->mps_scratch_mem_v;
-  free_scratch = a_group_to_band + MAX_PARAMETER_BANDS_PLUS_1;
+  free_scratch =
+      a_group_to_band + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS_PLUS_1,
+                                                      sizeof(*a_group_to_band), BYTE_ALIGN_8);
 
   if (pstr_mps_state->smooth_control) {
     for (ps = 0; ps < pstr_mps_state->num_parameter_sets; ps++) {
@@ -1911,7 +2133,9 @@ static VOID ixheaacd_decode_and_map_frame_smg(ia_heaac_mps_state_struct *pstr_mp
   return;
 }
 
-static VOID ixheaacd_decode_and_map_frame_arbdmx(ia_heaac_mps_state_struct *pstr_mps_state) {
+static IA_ERRORCODE ixheaacd_decode_and_map_frame_arbdmx(
+  ia_heaac_mps_state_struct *pstr_mps_state) {
+  IA_ERRORCODE error_code = IA_NO_ERROR;
   ia_mps_dec_spatial_bs_frame_struct *frame = pstr_mps_state->bs_frame;
   ia_mps_dec_bitdec_tables_struct *bitdec_table =
       pstr_mps_state->ia_mps_dec_mps_table.bitdec_table_ptr;
@@ -1923,12 +2147,13 @@ static VOID ixheaacd_decode_and_map_frame_arbdmx(ia_heaac_mps_state_struct *pstr
   VOID *scratch = pstr_mps_state->mps_scratch_mem_v;
 
   for (ch = 0; ch < pstr_mps_state->num_input_channels; ch++) {
-    ixheaacd_map_index_data(
+    error_code = ixheaacd_map_index_data(
         &frame->cld_lossless_data, p_aux_struct->arbdmx_gain, frame->arbdmx_gain_idx,
         frame->cmp_arbdmx_gain_idx, NULL, ch, frame->arbdmx_gain_idx_prev, offset + ch, CLD, 0,
         pstr_mps_state->bitstream_parameter_bands, pstr_mps_state->arbdmx_gain_default,
         pstr_mps_state->num_parameter_sets, param_slot, pstr_mps_state->extend_frame, 0, NULL,
         NULL, NULL, bitdec_table, scratch);
+    if (error_code) return error_code;
 
     p_aux_struct->arbdmx_residual_abs[ch] = frame->bs_arbitrary_downmix_residual_abs[ch];
     p_aux_struct->arbdmx_alpha_upd_set[ch] =
@@ -1948,9 +2173,12 @@ static VOID ixheaacd_decode_and_map_frame_arbdmx(ia_heaac_mps_state_struct *pstr
       }
     }
   }
+  return error_code;
 }
 
-static VOID ixheaacd_decode_and_map_frame_arb_tree(ia_heaac_mps_state_struct *pstr_mps_state) {
+static IA_ERRORCODE ixheaacd_decode_and_map_frame_arb_tree(
+  ia_heaac_mps_state_struct *pstr_mps_state) {
+  IA_ERRORCODE error_code = IA_NO_ERROR;
   ia_mps_dec_spatial_bs_frame_struct *p_cur_bs = pstr_mps_state->bs_frame;
   ia_mps_spatial_bs_config_struct *p_config = &(pstr_mps_state->bs_config);
   ia_mps_dec_auxilary_struct *p_aux_struct = pstr_mps_state->aux_struct;
@@ -1962,17 +2190,20 @@ static VOID ixheaacd_decode_and_map_frame_arb_tree(ia_heaac_mps_state_struct *ps
   WORD32 i;
 
   for (i = 0; i < p_config->num_ott_boxes_at; i++) {
-    ixheaacd_map_index_data(&p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld,
+    error_code = ixheaacd_map_index_data(&p_cur_bs->cld_lossless_data, p_aux_struct->ott_cld,
                             p_cur_bs->ott_cld_idx, p_cur_bs->cmp_ott_cld_idx, NULL, offset + i,
                             p_cur_bs->ott_cld_idx_prev, offset + i, CLD, 0,
                             p_config->bs_ott_bands_at[i], p_config->bs_ott_default_cld_at[i],
                             pstr_mps_state->num_parameter_sets, param_slot,
                             pstr_mps_state->extend_frame, pstr_mps_state->quant_mode, NULL, NULL,
                             NULL, pstr_mps_state->ia_mps_dec_mps_table.bitdec_table_ptr, scratch);
+    if (error_code) return error_code;
   }
+  return error_code;
 }
 
 IA_ERRORCODE ixheaacd_decode_frame(ia_heaac_mps_state_struct *pstr_mps_state) {
+  IA_ERRORCODE error_code = IA_NO_ERROR;
   ia_mps_spatial_bs_config_struct *p_bs_config = &pstr_mps_state->bs_config;
   WORD32 *param_slot = pstr_mps_state->aux_struct->param_slot;
 
@@ -1980,28 +2211,91 @@ IA_ERRORCODE ixheaacd_decode_frame(ia_heaac_mps_state_struct *pstr_mps_state) {
   if (param_slot[pstr_mps_state->num_parameter_sets - 1] != pstr_mps_state->time_slots - 1) {
     pstr_mps_state->extend_frame = 1;
   }
-
-  ixheaacd_decode_and_map_frame_ott(pstr_mps_state);
-  ixheaacd_decode_and_map_frame_ttt(pstr_mps_state);
-
-  ixheaacd_decode_and_map_frame_smg(pstr_mps_state);
-  if (p_bs_config->arbitrary_tree != 0) {
-    ixheaacd_decode_and_map_frame_arb_tree(pstr_mps_state);
-  }
-
-  if (pstr_mps_state->arbitrary_downmix != 0) {
-    ixheaacd_decode_and_map_frame_arbdmx(pstr_mps_state);
-  }
-
-  if (pstr_mps_state->extend_frame) {
-    pstr_mps_state->num_parameter_sets++;
-    if (pstr_mps_state->num_parameter_sets > MAX_PARAMETER_SETS) {
+  if (pstr_mps_state->extend_frame)
+  {
+    if (pstr_mps_state->num_parameter_sets == MAX_PARAMETER_SETS) {
       if (pstr_mps_state->ec_flag)
         pstr_mps_state->num_parameter_sets = 1;
       else
         return IA_FATAL_ERROR;
     }
+  }
 
+  error_code = ixheaacd_decode_and_map_frame_ott(pstr_mps_state);
+  if (error_code)
+  {
+    if (pstr_mps_state->ec_flag)
+    {
+      pstr_mps_state->frame_ok = 0;
+      for (WORD32 idx = 0; idx < MAX_NUM_OTT; idx++)
+      {
+        ixheaacd_mps_check_index_bounds(pstr_mps_state->bs_frame->ott_cld_idx,
+            pstr_mps_state->num_parameter_sets, 0, pstr_mps_state->bitstream_ott_bands[idx],
+            CLD, idx);
+        ixheaacd_mps_check_index_bounds(pstr_mps_state->bs_frame->ott_icc_idx,
+            pstr_mps_state->num_parameter_sets, 0, pstr_mps_state->bitstream_ott_bands[idx],
+            ICC, idx);
+      }
+    }
+    else
+      return error_code;
+  }
+
+  error_code = ixheaacd_decode_and_map_frame_ttt(pstr_mps_state);
+  if (error_code)
+  {
+    if (pstr_mps_state->ec_flag)
+    {
+      pstr_mps_state->frame_ok = 0;
+      ixheaacd_mps_check_index_bounds(pstr_mps_state->bs_frame->ttt_icc_idx,
+          pstr_mps_state->num_parameter_sets, 0, MAX_PARAMETER_BANDS,
+          ICC, 0);
+    }
+    else
+      return error_code;
+  }
+
+  ixheaacd_decode_and_map_frame_smg(pstr_mps_state);
+  if (p_bs_config->arbitrary_tree != 0) {
+    error_code = ixheaacd_decode_and_map_frame_arb_tree(pstr_mps_state);
+    if (error_code)
+    {
+      if (pstr_mps_state->ec_flag)
+      {
+        pstr_mps_state->frame_ok = 0;
+        for (WORD32 idx = 0; idx < MAX_NUM_OTT; idx++)
+        {
+          ixheaacd_mps_check_index_bounds(pstr_mps_state->bs_frame->ott_cld_idx,
+              pstr_mps_state->num_parameter_sets, 0, MAX_PARAMETER_BANDS,
+              CLD, idx);
+        }
+      }
+      else
+        return error_code;
+    }
+  }
+
+  if (pstr_mps_state->arbitrary_downmix != 0) {
+    error_code = ixheaacd_decode_and_map_frame_arbdmx(pstr_mps_state);
+    if (error_code)
+    {
+      if (pstr_mps_state->ec_flag)
+      {
+        pstr_mps_state->frame_ok = 0;
+        for (WORD32 idx = 0; idx < MAX_INPUT_CHANNELS_MPS; idx++)
+        {
+          ixheaacd_mps_check_index_bounds(pstr_mps_state->bs_frame->arbdmx_gain_idx,
+              pstr_mps_state->num_parameter_sets, 0, MAX_PARAMETER_BANDS,
+              CLD, idx);
+        }
+      }
+      else
+        return error_code;
+    }
+  }
+
+  if (pstr_mps_state->extend_frame) {
+    pstr_mps_state->num_parameter_sets++;
     param_slot[pstr_mps_state->num_parameter_sets - 1] = pstr_mps_state->time_slots - 1;
   }
   return IA_NO_ERROR;
@@ -2245,6 +2539,9 @@ IA_ERRORCODE ixheaacd_set_current_state_parameters(ia_heaac_mps_state_struct *ps
     if (curr_state->arbdmx_upd_qmf != UPD_QMF_15 && curr_state->arbdmx_upd_qmf != UPD_QMF_16 &&
         curr_state->arbdmx_upd_qmf != UPD_QMF_32 && curr_state->arbdmx_upd_qmf != UPD_QMF_18 &&
         curr_state->arbdmx_upd_qmf != UPD_QMF_30 && curr_state->arbdmx_upd_qmf != UPD_QMF_24)
+      return IA_XHEAAC_MPS_DEC_EXE_NONFATAL_INVALID_QMF_UPDATE;
+
+    if ((curr_state->arbdmx_upd_qmf * 1.5f) > (curr_state->upd_qmf * 2))
       return IA_XHEAAC_MPS_DEC_EXE_NONFATAL_INVALID_QMF_UPDATE;
   }
 

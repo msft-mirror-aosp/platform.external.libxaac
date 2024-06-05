@@ -22,8 +22,8 @@
 #include <string.h>
 #include <assert.h>
 
-#include "ixheaacd_type_def.h"
-#include "ixheaacd_constants.h"
+#include "ixheaac_type_def.h"
+#include "ixheaac_constants.h"
 #include "ixheaacd_cnst.h"
 
 #include "ixheaacd_bitbuffer.h"
@@ -46,7 +46,7 @@
 #include "ixheaacd_ps_dec.h"
 #include "ixheaacd_common_rom.h"
 #include "ixheaacd_qmf_dec.h"
-#include "ixheaacd_sbr_const.h"
+#include "ixheaac_sbr_const.h"
 #include "ixheaacd_lpp_tran.h"
 #include "ixheaacd_sbrdecoder.h"
 #include "ixheaacd_env_extr.h"
@@ -394,7 +394,9 @@ WORD32 ixheaacd_dec_data_init(VOID *handle,
       &usac_data->ccfl, &usac_data->output_samples,
       &pstr_frame_data->str_layer.sample_rate_layer,
       &layer_config->samp_frequency_index);
-
+  if (!pstr_frame_data->str_layer.sample_rate_layer) {
+    return -1;
+  }
   pstr_stream_config->sampling_frequency =
       pstr_frame_data->str_layer.sample_rate_layer;
   pstr_stream_config->samp_frequency_index = layer_config->samp_frequency_index;
@@ -501,7 +503,7 @@ WORD32 ixheaacd_frm_data_init(ia_audio_specific_config_struct *pstr_audio_conf,
   WORD32 stream_count = 1;
   WORD32 max_layer = -1;
 
-  memset(pstr_dec_data, 0, sizeof(ia_dec_data_struct));
+  memset(pstr_dec_data, 0, IXHEAAC_GET_SIZE_ALIGNED(sizeof(ia_dec_data_struct), BYTE_ALIGN_8));
   memset(&(pstr_dec_data->str_frame_data), 0,
          sizeof(pstr_dec_data->str_frame_data));
 

@@ -18,14 +18,14 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include <string.h>
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 #include "ixheaacd_mps_struct_def.h"
 #include "ixheaacd_error_codes.h"
 #include "ixheaacd_mps_res_rom.h"
 #include "ixheaacd_mps_aac_struct.h"
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops40.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops40.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_common_rom.h"
 #include "ixheaacd_sbrdecsettings.h"
@@ -34,7 +34,7 @@
 #include "ixheaacd_sbr_rom.h"
 #include "ixheaacd_hybrid.h"
 #include "ixheaacd_ps_dec.h"
-#include "ixheaacd_error_standards.h"
+#include "ixheaac_error_standards.h"
 #include "ixheaacd_mps_polyphase.h"
 #include "ixheaacd_config.h"
 #include "ixheaacd_qmf_dec.h"
@@ -156,7 +156,7 @@ static VOID ixheaacd_signal_2_parameters(ia_heaac_mps_state_struct *pstr_mps_sta
     if (abs(cld) > THIRTY_IN_Q16)
       cld_delta = THIRTY_IN_Q16;
     else
-      cld_delta = ixheaacd_abs32(cld);
+      cld_delta = ixheaac_abs32(cld);
 
     q_icc_delta = q_icc;
     icc_delta = ixheaacd_mps_add32(icc, ONE_IN_Q15, &q_icc_delta, 15);
@@ -301,11 +301,17 @@ static VOID ixheaacd_update_down_mix_state(ia_heaac_mps_state_struct *pstr_mps_s
   WORD32 num_parameter_bands = pstr_mps_state->num_parameter_bands;
   WORD32 hybrid_bands = pstr_mps_state->hybrid_bands;
   excitation_0 = pstr_mps_state->mps_scratch_mem_v;
-  q_excitation_0 = (WORD16 *)pstr_mps_state->mps_scratch_mem_v + PARAMETER_BANDSX2;
-  excitation_1 = excitation_0 + PARAMETER_BANDSX1_5;
-  q_excitation_1 = q_excitation_0 + PARAMETER_BANDSX3;
-  excitation_2 = excitation_1 + PARAMETER_BANDSX1_5;
-  q_excitation_2 = q_excitation_1 + PARAMETER_BANDSX3;
+  q_excitation_0 =
+      (WORD16 *)pstr_mps_state->mps_scratch_mem_v +
+      IXHEAAC_GET_SIZE_ALIGNED_TYPE(PARAMETER_BANDSX2, sizeof(*q_excitation_0), BYTE_ALIGN_8);
+  excitation_1 = excitation_0 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                    PARAMETER_BANDSX1_5, sizeof(*excitation_1), BYTE_ALIGN_8);
+  q_excitation_1 = q_excitation_0 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                        PARAMETER_BANDSX3, sizeof(*q_excitation_1), BYTE_ALIGN_8);
+  excitation_2 = excitation_1 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                    PARAMETER_BANDSX1_5, sizeof(*excitation_2), BYTE_ALIGN_8);
+  q_excitation_2 = q_excitation_1 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                        PARAMETER_BANDSX3, sizeof(*q_excitation_2), BYTE_ALIGN_8);
 
   p_x_real = &pstr_mps_state->array_struct->x_real[offset * MAX_HYBRID_BANDS];
   p_x_imag = &pstr_mps_state->array_struct->x_imag[offset * MAX_HYBRID_BANDS];

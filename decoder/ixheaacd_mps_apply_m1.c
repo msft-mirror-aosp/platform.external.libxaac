@@ -18,13 +18,13 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include <string.h>
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 #include "ixheaacd_mps_struct_def.h"
 #include "ixheaacd_mps_res_rom.h"
 #include "ixheaacd_mps_aac_struct.h"
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops40.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops40.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_common_rom.h"
 #include "ixheaacd_sbrdecsettings.h"
@@ -72,9 +72,12 @@ VOID ixheaacd_mps_apply_m1(ia_heaac_mps_state_struct *pstr_mps_state) {
   params[3] = hybrid_bands;
 
   rout_real_ptr = pstr_mps_state->mps_scratch_mem_v;
-  rout_kernel_real_ptr = rout_real_ptr + TSXHB;
-  rout_imag_ptr = rout_kernel_real_ptr + TSXHB;
-  rout_kernel_imag_ptr = rout_imag_ptr + TSXHB;
+  rout_kernel_real_ptr = rout_real_ptr + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                             TSXHB, sizeof(*rout_kernel_real_ptr), BYTE_ALIGN_8);
+  rout_imag_ptr = rout_kernel_real_ptr +
+                  IXHEAAC_GET_SIZE_ALIGNED_TYPE(TSXHB, sizeof(*rout_imag_ptr), BYTE_ALIGN_8);
+  rout_kernel_imag_ptr = rout_imag_ptr + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                             TSXHB, sizeof(*rout_kernel_imag_ptr), BYTE_ALIGN_8);
 
   p_buffer_real = p_array_struct->buf_real;
   p_buffer_imag = p_array_struct->buf_imag;

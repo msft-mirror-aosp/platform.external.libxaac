@@ -18,13 +18,13 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include <string.h>
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 #include "ixheaacd_mps_struct_def.h"
 #include "ixheaacd_mps_res_rom.h"
 #include "ixheaacd_mps_aac_struct.h"
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops40.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops40.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_common_rom.h"
 #include "ixheaacd_sbrdecsettings.h"
@@ -33,7 +33,7 @@
 #include "ixheaacd_sbr_rom.h"
 #include "ixheaacd_hybrid.h"
 #include "ixheaacd_ps_dec.h"
-#include "ixheaacd_error_standards.h"
+#include "ixheaac_error_standards.h"
 #include "ixheaacd_mps_polyphase.h"
 #include "ixheaacd_config.h"
 #include "ixheaacd_qmf_dec.h"
@@ -67,15 +67,18 @@ VOID ixheaacd_calc_m1m2_51s1(ia_heaac_mps_state_struct *pstr_mps_state) {
   WORD32 num_parameter_sets = pstr_mps_state->num_parameter_sets;
   WORD32 num_parameter_bands = pstr_mps_state->num_parameter_bands;
   iid = pstr_mps_state->mps_scratch_mem_v;
-  icc = iid + MAX_PARAMETER_BANDS;
-  h11 = icc + MAX_PARAMETER_BANDS;
-  h12 = h11 + MAX_PARAMETER_BANDS;
-  h21 = h12 + MAX_PARAMETER_BANDS;
-  h22 = h21 + MAX_PARAMETER_BANDS;
-  h12_res = h22 + MAX_PARAMETER_BANDS;
-  h22_res = h12_res + MAX_PARAMETER_BANDS;
-  c_l = (WORD16 *)pstr_mps_state->mps_scratch_mem_v + PARAMETER_BANDSX16;
-  c_r = c_l + MAX_PARAMETER_BANDS;
+  icc = iid + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*icc), BYTE_ALIGN_8);
+  h11 = icc + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h11), BYTE_ALIGN_8);
+  h12 = h11 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h12), BYTE_ALIGN_8);
+  h21 = h12 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h21), BYTE_ALIGN_8);
+  h22 = h21 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h22), BYTE_ALIGN_8);
+  h12_res =
+      h22 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h12_res), BYTE_ALIGN_8);
+  h22_res = h12_res +
+            IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h22_res), BYTE_ALIGN_8);
+  c_l = (WORD16 *)pstr_mps_state->mps_scratch_mem_v +
+        IXHEAAC_GET_SIZE_ALIGNED_TYPE(PARAMETER_BANDSX16, sizeof(*c_l), BYTE_ALIGN_8);
+  c_r = c_l + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*c_r), BYTE_ALIGN_8);
 
   for (ps = 0; ps < num_parameter_sets; ps++) {
     for (pb = 0; pb < num_parameter_bands; pb++) {
@@ -130,8 +133,8 @@ VOID ixheaacd_calc_m1m2_51s1(ia_heaac_mps_state_struct *pstr_mps_state) {
       temp_2 = ixheaacd_mps_mult32_shr_15(left_f, right_f);
       temp_2 = ixheaacd_mps_mult32_shr_15(temp_2, p_aux_struct->ott_icc[3][ps][pb]);
 
-      temp_1 = ixheaacd_add32_sat(temp_1, temp_2);
-      cross = ixheaacd_add32_sat(center, temp_1);
+      temp_1 = ixheaac_add32_sat(temp_1, temp_2);
+      cross = ixheaac_add32_sat(center, temp_1);
 
       temp_1 = ixheaacd_mps_div32_in_q15(left, right);
       qtemp1 = 15;
@@ -200,16 +203,19 @@ VOID ixheaacd_calc_m1m2_51s2(ia_heaac_mps_state_struct *pstr_mps_state) {
   WORD32 num_parameter_bands = pstr_mps_state->num_parameter_bands;
 
   iid = pstr_mps_state->mps_scratch_mem_v;
-  icc = iid + MAX_PARAMETER_BANDS;
-  h11 = icc + MAX_PARAMETER_BANDS;
-  h12 = h11 + MAX_PARAMETER_BANDS;
-  h21 = h12 + MAX_PARAMETER_BANDS;
-  h22 = h21 + MAX_PARAMETER_BANDS;
-  h12_res = h22 + MAX_PARAMETER_BANDS;
-  h22_res = h12_res + MAX_PARAMETER_BANDS;
-  g_s = h22_res + MAX_PARAMETER_BANDS;
-  c_l = (WORD16 *)pstr_mps_state->mps_scratch_mem_v + PARAMETER_BANDSX18;
-  c_r = c_l + MAX_PARAMETER_BANDS;
+  icc = iid + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*icc), BYTE_ALIGN_8);
+  h11 = icc + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h11), BYTE_ALIGN_8);
+  h12 = h11 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h12), BYTE_ALIGN_8);
+  h21 = h12 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h21), BYTE_ALIGN_8);
+  h22 = h21 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h22), BYTE_ALIGN_8);
+  h12_res =
+      h22 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h12_res), BYTE_ALIGN_8);
+  h22_res = h12_res +
+            IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h22_res), BYTE_ALIGN_8);
+  g_s = h22_res + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*g_s), BYTE_ALIGN_8);
+  c_l = (WORD16 *)pstr_mps_state->mps_scratch_mem_v +
+        IXHEAAC_GET_SIZE_ALIGNED_TYPE(PARAMETER_BANDSX18, sizeof(*c_l), BYTE_ALIGN_8);
+  c_r = c_l + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*c_r), BYTE_ALIGN_8);
 
   for (ps = 0; ps < num_parameter_sets; ps++) {
     for (pb = 0; pb < num_parameter_bands; pb++) {
@@ -243,30 +249,30 @@ VOID ixheaacd_calc_m1m2_51s2(ia_heaac_mps_state_struct *pstr_mps_state) {
       temp_1 = ixheaacd_mps_convert_to_qn(temp_1, qtemp1, 15);
       cross = ixheaacd_mps_mult32_shr_15(temp_1, p_aux_struct->ott_icc[1][ps][pb]);
 
-      temp_1 = ixheaacd_add32_sat((left + right), cross);
+      temp_1 = ixheaac_add32_sat((left + right), cross);
       temp_1 = ixheaacd_mps_mult32_shr_15(temp_1, center);
       qtemp1 = 15;
       temp_1 = ixheaacd_mps_sqrt(temp_1, &qtemp1, sqrt_tab);
       temp_1 = ixheaacd_mps_convert_to_qn(temp_1, qtemp1, 15);
       temp_1 = ixheaacd_mps_mult32_shr_15(temp_1, p_aux_struct->ott_icc[0][ps][pb]);
-      temp_1 = ixheaacd_add32_sat(temp_1, center);
-      cross = ixheaacd_add32_sat(cross, temp_1);
+      temp_1 = ixheaac_add32_sat(temp_1, center);
+      cross = ixheaac_add32_sat(cross, temp_1);
 
       temp_1 = ixheaacd_mps_mult32_shr_15(left, center);
       qtemp1 = 15;
       temp_1 = ixheaacd_mps_sqrt(temp_1, &qtemp1, sqrt_tab);
       temp_1 = ixheaacd_mps_convert_to_qn(2 * temp_1, qtemp1, 15);
       temp_1 = ixheaacd_mps_mult32_shr_15(temp_1, p_aux_struct->ott_icc[0][ps][pb]);
-      temp_1 = ixheaacd_add32_sat(temp_1, center);
-      left = ixheaacd_add32_sat(left, temp_1);
+      temp_1 = ixheaac_add32_sat(temp_1, center);
+      left = ixheaac_add32_sat(left, temp_1);
 
       temp_1 = ixheaacd_mps_mult32_shr_15(right, center);
       qtemp1 = 15;
       temp_1 = ixheaacd_mps_sqrt(temp_1, &qtemp1, sqrt_tab);
       temp_1 = ixheaacd_mps_convert_to_qn(2 * temp_1, qtemp1, 15);
       temp_1 = ixheaacd_mps_mult32_shr_15(temp_1, p_aux_struct->ott_icc[0][ps][pb]);
-      temp_1 = ixheaacd_add32_sat(temp_1, center);
-      right = ixheaacd_add32_sat(right, temp_1);
+      temp_1 = ixheaac_add32_sat(temp_1, center);
+      right = ixheaac_add32_sat(right, temp_1);
 
       temp_1 = ixheaacd_mps_div32_in_q15(left, right);
       qtemp1 = 15;
@@ -282,7 +288,7 @@ VOID ixheaacd_calc_m1m2_51s2(ia_heaac_mps_state_struct *pstr_mps_state) {
 
       icc[pb] = ixheaacd_mps_div32_in_q15(cross, temp_1);
 
-      temp_1 = ixheaacd_add32_sat(left, right);
+      temp_1 = ixheaac_add32_sat(left, right);
       qtemp1 = 15;
       temp_1 = ixheaacd_mps_sqrt(temp_1, &qtemp1, sqrt_tab);
       g_s[pb] = ixheaacd_mps_convert_to_qn(temp_1, qtemp1, 15);

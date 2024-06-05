@@ -18,8 +18,8 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include <math.h>
-#include "ixheaacd_type_def.h"
-#include "ixheaacd_constants.h"
+#include "ixheaac_type_def.h"
+#include "ixheaac_constants.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_common_rom.h"
 #include "ixheaacd_sbrdecsettings.h"
@@ -39,12 +39,12 @@
 #include "ixheaacd_lpp_tran.h"
 #include "ixheaacd_env_extr.h"
 #include "ixheaacd_env_calc.h"
-#include "ixheaacd_sbr_const.h"
+#include "ixheaac_sbr_const.h"
 #include "ixheaacd_pvc_dec.h"
 #include "ixheaacd_sbr_dec.h"
 #include "ixheaacd_audioobjtypes.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops40.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops40.h"
 #include "ixheaacd_mps_bitdec.h"
 #include "ixheaacd_mps_macro_def.h"
 #include "ixheaacd_mps_get_index.h"
@@ -360,24 +360,37 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
   WORD32 tree_config = pstr_mps_state->tree_config;
 
   dry_ener = pstr_mps_state->mps_scratch_mem_v;
-  q_dry_ener = (WORD16 *)pstr_mps_state->mps_scratch_mem_v + INPUT_CHX2;
+  q_dry_ener = (WORD16 *)pstr_mps_state->mps_scratch_mem_v +
+               IXHEAAC_GET_SIZE_ALIGNED_TYPE(INPUT_CHX2, sizeof(*q_dry_ener), BYTE_ALIGN_8);
 
-  wet_ener = dry_ener + INPUT_CHX1_5;
-  q_wet_ener = q_dry_ener + IN_CH_2XOUT_CH;
+  wet_ener =
+      dry_ener + IXHEAAC_GET_SIZE_ALIGNED_TYPE(INPUT_CHX1_5, sizeof(*wet_ener), BYTE_ALIGN_8);
+  q_wet_ener = q_dry_ener +
+               IXHEAAC_GET_SIZE_ALIGNED_TYPE(IN_CH_2XOUT_CH, sizeof(*q_wet_ener), BYTE_ALIGN_8);
 
-  scale = wet_ener + OUTPUT_CHX1_5;
-  q_scale = q_wet_ener + OUTPUT_CHX3;
+  scale = wet_ener + IXHEAAC_GET_SIZE_ALIGNED_TYPE(OUTPUT_CHX1_5, sizeof(*scale), BYTE_ALIGN_8);
+  q_scale =
+      q_wet_ener + IXHEAAC_GET_SIZE_ALIGNED_TYPE(OUTPUT_CHX3, sizeof(*q_scale), BYTE_ALIGN_8);
 
-  dmx_real = scale + OUTPUT_CHX1_5;
-  dmx_imag = dmx_real + IN_CHXBP_SIZE;
+  dmx_real =
+      scale + IXHEAAC_GET_SIZE_ALIGNED_TYPE(OUTPUT_CHX1_5, sizeof(*dmx_real), BYTE_ALIGN_8);
+  dmx_imag =
+      dmx_real + IXHEAAC_GET_SIZE_ALIGNED_TYPE(IN_CHXBP_SIZE, sizeof(*dmx_imag), BYTE_ALIGN_8);
 
-  qmf_output_real_dry = dmx_imag + IN_CHXBP_SIZE;
+  qmf_output_real_dry = dmx_imag + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                       IN_CHXBP_SIZE, sizeof(*qmf_output_real_dry), BYTE_ALIGN_8);
 
-  qmf_output_imag_dry = qmf_output_real_dry + OUT_CHXQB;
+  qmf_output_imag_dry =
+      qmf_output_real_dry +
+      IXHEAAC_GET_SIZE_ALIGNED_TYPE(OUT_CHXQB, sizeof(*qmf_output_imag_dry), BYTE_ALIGN_8);
 
-  qmf_output_real_wet = qmf_output_imag_dry + OUT_CHXQB;
+  qmf_output_real_wet =
+      qmf_output_imag_dry +
+      IXHEAAC_GET_SIZE_ALIGNED_TYPE(OUT_CHXQB, sizeof(*qmf_output_real_wet), BYTE_ALIGN_8);
 
-  qmf_output_imag_wet = qmf_output_real_wet + OUT_CHXQB;
+  qmf_output_imag_wet =
+      qmf_output_real_wet +
+      IXHEAAC_GET_SIZE_ALIGNED_TYPE(OUT_CHXQB, sizeof(*qmf_output_imag_wet), BYTE_ALIGN_8);
 
   if (sub_band_tp->update_old_ener == STP_UPDATE_ENERGY_RATE) {
     sub_band_tp->update_old_ener = 1;
@@ -819,7 +832,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_lf] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_lf], &qtemp2);
         q_scale[i_lf] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_lf];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_lf] = dry_ener[0] << temp_1;
         q_scale[i_lf] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -829,7 +842,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_rf] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_rf], &qtemp2);
         q_scale[i_rf] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_rf];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_rf] = dry_ener[0] << temp_1;
         q_scale[i_rf] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -839,7 +852,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_c] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_c], &qtemp2);
         q_scale[i_c] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_c];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_c] = dry_ener[0] << temp_1;
         q_scale[i_c] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -849,7 +862,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_ls] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_ls], &qtemp2);
         q_scale[i_ls] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_ls];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_ls] = dry_ener[0] << temp_1;
         q_scale[i_ls] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -859,7 +872,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_rs] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_rs], &qtemp2);
         q_scale[i_rs] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_rs];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_rs] = dry_ener[0] << temp_1;
         q_scale[i_rs] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -881,7 +894,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_lf] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_lf], &qtemp2);
         q_scale[i_lf] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_lf];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_lf] = dry_ener[0] << temp_1;
         q_scale[i_lf] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -891,7 +904,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_rf] = ixheaacd_mps_div_32(dry_ener[1], wet_ener[i_rf], &qtemp2);
         q_scale[i_rf] = qtemp2 + q_dry_ener[1] - q_wet_ener[i_rf];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[1]);
+        temp_1 = ixheaac_norm32(dry_ener[1]);
         scale[i_rf] = dry_ener[1] << temp_1;
         q_scale[i_rf] = q_dry_ener[1] + temp_1 - 30;
       }
@@ -901,7 +914,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_ls] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_ls], &qtemp2);
         q_scale[i_ls] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_ls];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_ls] = dry_ener[0] << temp_1;
         q_scale[i_ls] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -911,7 +924,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_rs] = ixheaacd_mps_div_32(dry_ener[1], wet_ener[i_rs], &qtemp2);
         q_scale[i_rs] = qtemp2 + q_dry_ener[1] - q_wet_ener[i_rs];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[1]);
+        temp_1 = ixheaac_norm32(dry_ener[1]);
         scale[i_rs] = dry_ener[1] << temp_1;
         q_scale[i_rs] = q_dry_ener[1] + temp_1 - 30;
       }
@@ -932,7 +945,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_lf] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_lf], &qtemp2);
         q_scale[i_lf] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_lf];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_lf] = dry_ener[0] << temp_1;
         q_scale[i_lf] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -942,7 +955,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_rf] = ixheaacd_mps_div_32(dry_ener[1], wet_ener[i_rf], &qtemp2);
         q_scale[i_rf] = qtemp2 + q_dry_ener[1] - q_wet_ener[i_rf];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[1]);
+        temp_1 = ixheaac_norm32(dry_ener[1]);
         scale[i_rf] = dry_ener[1] << temp_1;
         q_scale[i_rf] = q_dry_ener[1] + temp_1 - 30;
       }
@@ -952,7 +965,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_ls] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_ls], &qtemp2);
         q_scale[i_ls] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_ls];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_ls] = dry_ener[0] << temp_1;
         q_scale[i_ls] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -962,7 +975,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_rs] = ixheaacd_mps_div_32(dry_ener[1], wet_ener[i_rs], &qtemp2);
         q_scale[i_rs] = qtemp2 + q_dry_ener[1] - q_wet_ener[i_rs];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[1]);
+        temp_1 = ixheaac_norm32(dry_ener[1]);
         scale[i_rs] = dry_ener[1] << temp_1;
         q_scale[i_rs] = q_dry_ener[1] + temp_1 - 30;
       }
@@ -972,7 +985,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_al] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_al], &qtemp2);
         q_scale[i_al] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_al];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_al] = dry_ener[0] << temp_1;
         q_scale[i_al] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -982,7 +995,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_ar] = ixheaacd_mps_div_32(dry_ener[1], wet_ener[i_ar], &qtemp2);
         q_scale[i_ar] = qtemp2 + q_dry_ener[1] - q_wet_ener[i_ar];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[1]);
+        temp_1 = ixheaac_norm32(dry_ener[1]);
         scale[i_ar] = dry_ener[1] << temp_1;
         q_scale[i_ar] = q_dry_ener[1] + temp_1 - 30;
       }
@@ -1003,7 +1016,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_lf] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_lf], &qtemp2);
         q_scale[i_lf] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_lf];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_lf] = dry_ener[0] << temp_1;
         q_scale[i_lf] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -1013,7 +1026,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_rf] = ixheaacd_mps_div_32(dry_ener[1], wet_ener[i_rf], &qtemp2);
         q_scale[i_rf] = qtemp2 + q_dry_ener[1] - q_wet_ener[i_rf];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[1]);
+        temp_1 = ixheaac_norm32(dry_ener[1]);
         scale[i_rf] = dry_ener[1] << temp_1;
         q_scale[i_rf] = q_dry_ener[1] + temp_1 - 30;
       }
@@ -1023,7 +1036,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_al] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_al], &qtemp2);
         q_scale[i_al] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_al];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_al] = dry_ener[0] << temp_1;
         q_scale[i_al] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -1033,7 +1046,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_ar] = ixheaacd_mps_div_32(dry_ener[1], wet_ener[i_ar], &qtemp2);
         q_scale[i_ar] = qtemp2 + q_dry_ener[1] - q_wet_ener[i_ar];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[1]);
+        temp_1 = ixheaac_norm32(dry_ener[1]);
         scale[i_ar] = dry_ener[1] << temp_1;
         q_scale[i_ar] = q_dry_ener[1] + temp_1 - 30;
       }
@@ -1054,7 +1067,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_ls] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_ls], &qtemp2);
         q_scale[i_ls] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_ls];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_ls] = dry_ener[0] << temp_1;
         q_scale[i_ls] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -1064,7 +1077,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_rs] = ixheaacd_mps_div_32(dry_ener[1], wet_ener[i_rs], &qtemp2);
         q_scale[i_rs] = qtemp2 + q_dry_ener[1] - q_wet_ener[i_rs];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[1]);
+        temp_1 = ixheaac_norm32(dry_ener[1]);
         scale[i_rs] = dry_ener[1] << temp_1;
         q_scale[i_rs] = q_dry_ener[1] + temp_1 - 30;
       }
@@ -1074,7 +1087,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_al] = ixheaacd_mps_div_32(dry_ener[0], wet_ener[i_al], &qtemp2);
         q_scale[i_al] = qtemp2 + q_dry_ener[0] - q_wet_ener[i_al];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[0]);
+        temp_1 = ixheaac_norm32(dry_ener[0]);
         scale[i_al] = dry_ener[0] << temp_1;
         q_scale[i_al] = q_dry_ener[0] + temp_1 - 30;
       }
@@ -1084,7 +1097,7 @@ static VOID ixheaacd_subband_tp(ia_heaac_mps_state_struct *pstr_mps_state, WORD3
         scale[i_ar] = ixheaacd_mps_div_32(dry_ener[1], wet_ener[i_ar], &qtemp2);
         q_scale[i_ar] = qtemp2 + q_dry_ener[1] - q_wet_ener[i_ar];
       } else {
-        temp_1 = ixheaacd_norm32(dry_ener[1]);
+        temp_1 = ixheaac_norm32(dry_ener[1]);
         scale[i_ar] = dry_ener[1] << temp_1;
         q_scale[i_ar] = q_dry_ener[1] + temp_1 - 30;
       }

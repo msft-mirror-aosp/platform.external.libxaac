@@ -17,14 +17,14 @@
  *****************************************************************************
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 #include "ixheaacd_mps_struct_def.h"
 #include "ixheaacd_mps_res_rom.h"
 #include "ixheaacd_mps_aac_struct.h"
 #include "ixheaacd_sbr_common.h"
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops40.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops40.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_common_rom.h"
 #include "ixheaacd_sbrdecsettings.h"
@@ -33,7 +33,7 @@
 #include "ixheaacd_sbr_rom.h"
 #include "ixheaacd_hybrid.h"
 #include "ixheaacd_ps_dec.h"
-#include "ixheaacd_error_standards.h"
+#include "ixheaac_error_standards.h"
 #include "ixheaacd_mps_polyphase.h"
 #include "ixheaacd_config.h"
 #include "ixheaacd_qmf_dec.h"
@@ -56,14 +56,18 @@ VOID ixheaacd_calc_m1m2_emm(ia_heaac_mps_state_struct *pstr_mps_state) {
   WORD16 *dummy3, *dummy4;
 
   h11 = pstr_mps_state->mps_scratch_mem_v;
-  h12 = h11 + MAX_PARAMETER_BANDS;
-  h21 = h12 + MAX_PARAMETER_BANDS;
-  h22 = h21 + MAX_PARAMETER_BANDS;
-  dummy1 = h22 + MAX_PARAMETER_BANDS;
-  dummy2 = dummy1 + MAX_PARAMETER_BANDS;
+  h12 = h11 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h12), BYTE_ALIGN_8);
+  h21 = h12 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h21), BYTE_ALIGN_8);
+  h22 = h21 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*h22), BYTE_ALIGN_8);
+  dummy1 =
+      h22 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*dummy1), BYTE_ALIGN_8);
+  dummy2 =
+      dummy1 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*dummy2), BYTE_ALIGN_8);
 
-  dummy3 = (WORD16 *)pstr_mps_state->mps_scratch_mem_v + PARAMETER_BANDSX12;
-  dummy4 = dummy3 + MAX_PARAMETER_BANDS;
+  dummy3 = (WORD16 *)pstr_mps_state->mps_scratch_mem_v +
+           IXHEAAC_GET_SIZE_ALIGNED_TYPE(PARAMETER_BANDSX12, sizeof(*dummy3), BYTE_ALIGN_8);
+  dummy4 =
+      dummy3 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_PARAMETER_BANDS, sizeof(*dummy4), BYTE_ALIGN_8);
 
   for (ps = 0; ps < pstr_mps_state->num_parameter_sets; ps++) {
     ixheaacd_param_2_umx_ps(pstr_mps_state, h11, h12, h21, h22, dummy1, dummy2, dummy3, dummy4, 0,

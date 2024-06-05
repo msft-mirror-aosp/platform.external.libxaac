@@ -19,7 +19,7 @@
 */
 #include <math.h>
 #include <string.h>
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_common_rom.h"
 #include "ixheaacd_sbrdecsettings.h"
@@ -35,13 +35,13 @@
 #include "ixheaacd_mps_struct_def.h"
 #include "ixheaacd_mps_res_rom.h"
 #include "ixheaacd_mps_aac_struct.h"
-#include "ixheaacd_constants.h"
+#include "ixheaac_constants.h"
 #include "ixheaacd_mps_dec.h"
 #include "ixheaacd_mps_decor.h"
 #include "ixheaacd_mps_hybfilter.h"
-#include "ixheaacd_error_standards.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops40.h"
+#include "ixheaac_error_standards.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops40.h"
 #include "ixheaacd_mps_macro_def.h"
 #include "ixheaacd_mps_basic_op.h"
 
@@ -412,12 +412,12 @@ static VOID ixheaacd_convert_lattice_coefs_complex(WORD32 const order,
       temp = (WORD64)((WORD64)rfc_real[i] * (WORD64)tmp_real[i - j - 1] +
                       (WORD64)rfc_imag[i] * (WORD64)tmp_imag[i - j - 1]);
       temp >>= 15;
-      apar_real[j + 1] = ixheaacd_add32(tmp_real[j], (WORD32)temp);
+      apar_real[j + 1] = ixheaac_add32(tmp_real[j], (WORD32)temp);
 
       temp = (WORD64)((WORD64)rfc_real[i] * (WORD64)tmp_imag[i - j - 1] +
                       (WORD64)rfc_imag[i] * (WORD64)tmp_real[i - j - 1]);
       temp >>= 15;
-      apar_imag[j + 1] = ixheaacd_sub32(tmp_imag[j], (WORD32)temp);
+      apar_imag[j + 1] = ixheaac_sub32(tmp_imag[j], (WORD32)temp);
     }
     for (j = 0; j <= i; j++) {
       tmp_real[j] = apar_real[j + 1];
@@ -623,7 +623,8 @@ static VOID ixheaacd_ducker_apply_71(
   WORD16 one_by_5 = ONE_BY_FIVE_Q16;
 
   duck_gain = scratch;
-  q_duck_gain = (WORD16 *)scratch + PARAMETER_BANDSX2;
+  q_duck_gain = (WORD16 *)scratch + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                        PARAMETER_BANDSX2, sizeof(*q_duck_gain), BYTE_ALIGN_8);
 
   p_input_real = input_real;
   p_input_imag = input_imag;
@@ -684,6 +685,9 @@ static VOID ixheaacd_ducker_apply_71(
       if (ixheaacd_mps_comp(temp3, temp_1, &qtemp, qtemp1)) {
         temp_2 = ixheaacd_mps_div_32(temp3, temp_1, &qtemp2);
         qtemp2 = qtemp2 + qtemp - qtemp1;
+        if (temp_1 == 0) {
+          qtemp2 = qtemp;
+        }
         temp3 = (qtemp2) > 28 ? MAX_32 : 4 << qtemp2;
 
         if (temp_2 > temp3) {
@@ -789,7 +793,8 @@ static VOID ixheaacd_ducker_apply(
   WORD16 one_by_5 = ONE_BY_FIVE_Q16;
 
   duck_gain = scratch;
-  q_duck_gain = (WORD16 *)scratch + PARAMETER_BANDSX2;
+  q_duck_gain = (WORD16 *)scratch + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                        PARAMETER_BANDSX2, sizeof(*q_duck_gain), BYTE_ALIGN_8);
 
   p_input_real = input_real;
   p_input_imag = input_imag;
@@ -837,6 +842,9 @@ static VOID ixheaacd_ducker_apply(
       if (ixheaacd_mps_comp(temp3, temp_1, &qtemp, qtemp1)) {
         temp_2 = ixheaacd_mps_div_32(temp3, temp_1, &qtemp2);
         qtemp2 = qtemp2 + qtemp - qtemp1;
+        if (temp_1 == 0) {
+          qtemp2 = qtemp;
+        }
         temp3 = qtemp2 > 28 ? MAX_32 : 4 << qtemp2;
 
         if (temp_2 > temp3) {
@@ -1006,7 +1014,8 @@ VOID ixheaacd_decorr_apply(ia_heaac_mps_state_struct *pstr_mps_state, WORD32 len
   WORD32 length1;
   VOID *free_scratch;
 
-  free_scratch = (WORD32 *)pstr_mps_state->mps_scratch_mem_v + MAX_TIMESLOTSX2;
+  free_scratch = (WORD32 *)pstr_mps_state->mps_scratch_mem_v +
+                 IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_TIMESLOTSX2, sizeof(WORD32), BYTE_ALIGN_8);
 
   if (decorr_ptr != NULL) {
     p_input_real = input_real;

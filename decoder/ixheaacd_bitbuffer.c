@@ -21,14 +21,14 @@
 #include <string.h>
 #include <assert.h>
 #include "ixheaacd_sbr_common.h"
-#include "ixheaacd_type_def.h"
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops16.h"
-#include "ixheaacd_basic_ops40.h"
-#include "ixheaacd_basic_ops.h"
+#include "ixheaac_type_def.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops16.h"
+#include "ixheaac_basic_ops40.h"
+#include "ixheaac_basic_ops.h"
 
-#include "ixheaacd_basic_op.h"
+#include "ixheaac_basic_op.h"
 #include "ixheaacd_intrinsics.h"
 #include "ixheaacd_bitbuffer.h"
 
@@ -178,6 +178,13 @@ VOID ixheaacd_aac_read_byte_corr1(UWORD8 **ptr_read_next, WORD32 *ptr_bit_pos,
       v++;
     }
   }
+
+  if (bits_consumed > (31 - temp_bit_count)) {
+    if ((p_bit_buf_end != NULL) && (p_bit_buf_end < v)) {
+      bits_consumed = 31 - temp_bit_count;
+    }
+  }
+
   *ptr_bit_pos = bits_consumed + temp_bit_count;
   *ptr_read_next = v;
   return;
@@ -198,6 +205,13 @@ VOID ixheaacd_aac_read_byte_corr(UWORD8 **ptr_read_next, WORD32 *ptr_bit_pos,
   } else {
     bits_consumed += 8;
   }
+
+  if (bits_consumed > 31) {
+    if (p_bit_buf_end < v) {
+      bits_consumed = 31;
+    }
+  }
+
   *ptr_bit_pos = bits_consumed;
   *ptr_read_next = v;
   return;

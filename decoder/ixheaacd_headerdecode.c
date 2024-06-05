@@ -18,12 +18,12 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include <stdlib.h>
-#include "ixheaacd_type_def.h"
-#include "ixheaacd_error_standards.h"
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops16.h"
-#include "ixheaacd_basic_ops40.h"
+#include "ixheaac_type_def.h"
+#include "ixheaac_error_standards.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops16.h"
+#include "ixheaac_basic_ops40.h"
 #include "ixheaacd_sbr_common.h"
 
 #include "ixheaacd_bitbuffer.h"
@@ -90,7 +90,7 @@
 #include "ixheaacd_function_selector.h"
 #include "ixheaacd_ld_mps_dec.h"
 
-#include "ixheaacd_error_standards.h"
+#include "ixheaac_error_standards.h"
 
 #define ELDEXT_SAOC 1
 #define ELDEXT_TERM 0
@@ -535,6 +535,11 @@ WORD32 ixheaacd_ga_hdr_dec(ia_aac_dec_state_struct *aac_state_struct,
 
   aac_state_struct->ch_config = ixheaacd_read_bits_buf(it_bit_buff, 4);
 
+  if (aac_state_struct->audio_object_type == AOT_USAC &&
+      ((aac_state_struct->ch_config >= 3) && (aac_state_struct->ch_config != 8))) {
+    return IA_XHEAAC_DEC_INIT_FATAL_DEC_INIT_FAIL;
+  }
+
   pstr_audio_specific_config->channel_configuration =
       aac_state_struct->ch_config;
 
@@ -832,11 +837,11 @@ WORD32 ixheaacd_check_if_adts(ia_adts_header_struct *adts,
 
   result = ixheaacd_adtsframe(adts, it_bit_buff);
 
-  max_frm_len_per_ch = ixheaacd_mult32(768, (adts->no_raw_data_blocks + 1));
+  max_frm_len_per_ch = ixheaac_mult32(768, (adts->no_raw_data_blocks + 1));
 
   if (adts->channel_configuration != 0)
     max_frm_len_per_ch =
-        ixheaacd_mult32(max_frm_len_per_ch, adts->channel_configuration);
+        ixheaac_mult32(max_frm_len_per_ch, adts->channel_configuration);
   else
     max_frm_len_per_ch = max_frm_len_per_ch * usr_max_ch;
 
@@ -1122,19 +1127,12 @@ WORD32 ixheaacd_aac_headerdecode(
             ixheaacd_latm_header_decode(aac_state_struct, &it_bit_buff,
                                         bytes_consumed, pstr_samp_rate_info);
         if (result != 0) {
-          if ((result ==
-               (WORD32)
-                   IA_XHEAAC_DEC_EXE_NONFATAL_INSUFFICIENT_INPUT_BYTES) ||
-              (result ==
-               (WORD32)IA_XHEAAC_DEC_INIT_FATAL_STREAM_CHAN_GT_MAX)) {
+          if ((result == (WORD32)IA_XHEAAC_DEC_EXE_NONFATAL_INSUFFICIENT_INPUT_BYTES) ||
+              (result < 0)) {
             bytes_taken += *bytes_consumed;
             *bytes_consumed = bytes_taken;
             return result;
-          } else if (result == -1)
-            return -1;
-          else if (result == (WORD32)IA_FATAL_ERROR)
-            return IA_FATAL_ERROR;
-          else
+          } else
             bytes_taken += *bytes_consumed - 1;
           continue;
         }

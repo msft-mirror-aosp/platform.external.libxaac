@@ -18,14 +18,14 @@
  * Originally developed and contributed by Ittiam Systems Pvt. Ltd, Bangalore
 */
 #include <string.h>
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 #include "ixheaacd_mps_struct_def.h"
 #include "ixheaacd_error_codes.h"
 #include "ixheaacd_mps_res_rom.h"
 #include "ixheaacd_mps_aac_struct.h"
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops40.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops40.h"
 #include "ixheaacd_bitbuffer.h"
 #include "ixheaacd_cnst.h"
 #include "ixheaacd_common_rom.h"
@@ -35,7 +35,7 @@
 #include "ixheaacd_sbr_rom.h"
 #include "ixheaacd_hybrid.h"
 #include "ixheaacd_ps_dec.h"
-#include "ixheaacd_error_standards.h"
+#include "ixheaac_error_standards.h"
 #include "ixheaacd_mps_polyphase.h"
 #include "ixheaacd_config.h"
 #include "ixheaacd_qmf_dec.h"
@@ -874,7 +874,8 @@ static VOID ixheaacd_local_imdet(
   WORD32 l;
 
   WORD32 *p_sum = scratch;
-  WORD32 *p_diff = (WORD32 *)scratch + SUM_SIZE;
+  WORD32 *p_diff =
+      (WORD32 *)scratch + IXHEAAC_GET_SIZE_ALIGNED_TYPE(SUM_SIZE, sizeof(*p_diff), BYTE_ALIGN_8);
 
   z_real_2 = z_real + lw;
   z_imag_2 = z_imag + lw;
@@ -1526,16 +1527,21 @@ VOID ixheaacd_mdct2qmf_process(WORD32 upd_qmf, WORD32 *const mdct_in, WORD32 *qm
   WORD32 *wp;
 
   wf = scratch;
-  wt = wf + MAX_TIMESLOTSX2;
-  v1 = wt + MAX_TIMESLOTSX2;
-  v2 = v1 + MDCT_LENGTH_HI;
-  twipost_real = v2 + MDCT_LENGTH_HI;
-  twipost_imag = twipost_real + MAX_NUM_QMF_BANDS;
-  mdct_sf = twipost_imag + MAX_NUM_QMF_BANDS;
-  z1_real = mdct_sf + MDCT_LENGTH_SF;
-  z1_imag = z1_real + QBXTSX2;
-  a = z1_imag + QBXTSX2;
-  free_scratch = (VOID *)((WORD32 *)a + MAX_NUM_QMF_BANDS);
+  wt = wf + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_TIMESLOTSX2, sizeof(*wt), BYTE_ALIGN_8);
+  v1 = wt + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_TIMESLOTSX2, sizeof(*v1), BYTE_ALIGN_8);
+  v2 = v1 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MDCT_LENGTH_HI, sizeof(*v2), BYTE_ALIGN_8);
+  twipost_real =
+      v2 + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MDCT_LENGTH_HI, sizeof(*twipost_real), BYTE_ALIGN_8);
+  twipost_imag = twipost_real + IXHEAAC_GET_SIZE_ALIGNED_TYPE(
+                                    MAX_NUM_QMF_BANDS, sizeof(*twipost_imag), BYTE_ALIGN_8);
+  mdct_sf = twipost_imag +
+            IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_NUM_QMF_BANDS, sizeof(*mdct_sf), BYTE_ALIGN_8);
+  z1_real =
+      mdct_sf + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MDCT_LENGTH_SF, sizeof(*z1_real), BYTE_ALIGN_8);
+  z1_imag = z1_real + IXHEAAC_GET_SIZE_ALIGNED_TYPE(QBXTSX2, sizeof(*z1_imag), BYTE_ALIGN_8);
+  a = z1_imag + IXHEAAC_GET_SIZE_ALIGNED_TYPE(QBXTSX2, sizeof(*a), BYTE_ALIGN_8);
+  free_scratch = (VOID *)((WORD32 *)a + IXHEAAC_GET_SIZE_ALIGNED_TYPE(MAX_NUM_QMF_BANDS,
+                                                                      sizeof(*a), BYTE_ALIGN_8));
 
   scale = a;
 

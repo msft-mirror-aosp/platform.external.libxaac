@@ -20,13 +20,13 @@
 #include <stdio.h>
 #include <string.h>
 #include "ixheaacd_sbr_common.h"
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops16.h"
-#include "ixheaacd_basic_ops40.h"
-#include "ixheaacd_basic_ops.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops16.h"
+#include "ixheaac_basic_ops40.h"
+#include "ixheaac_basic_ops.h"
 #include "ixheaacd_bitbuffer.h"
 
 #include "ixheaacd_defines.h"
@@ -57,7 +57,7 @@
 #include "ixheaacd_mps_res_rom.h"
 #include "ixheaacd_mps_aac_struct.h"
 #include "ixheaacd_mps_dec.h"
-#include "ixheaacd_error_standards.h"
+#include "ixheaac_error_standards.h"
 #include "ixheaacd_sbrdecoder.h"
 #include "ixheaacd_acelp_info.h"
 #include "ixheaacd_tns_usac.h"
@@ -94,8 +94,6 @@
 #define EXT_FIL 0
 #define EXT_DATA_LENGTH 3
 #define EXT_LDSAC_DATA 9
-
-#define MIN(x, y) ((x) > (y) ? (y) : (x))
 
 extern const ia_usac_samp_rate_info ixheaacd_samp_rate_info[];
 
@@ -228,6 +226,11 @@ WORD32 ixheaacd_aacdec_decodeframe(
           pstr_imdct_tables->only_short_window_kbd_120;
     }
 
+    if (p_obj_exhaacplus_dec->aac_config.ui_err_conceal && frame_status == 0)
+    {
+      memset(&aac_dec_handle->pstr_aac_dec_ch_info[ch]->str_ics_info, 0,
+             sizeof(ia_ics_info_struct));
+    }
     aac_dec_handle->pstr_aac_dec_ch_info[ch]->str_ics_info.frame_length = frame_length;
     if (object_type == AOT_ER_AAC_ELD || object_type == AOT_ER_AAC_LD ||
         object_type == AOT_AAC_LTP) {
@@ -274,13 +277,15 @@ WORD32 ixheaacd_aacdec_decodeframe(
     }
     if ((object_type == AOT_ER_AAC_LD) || (object_type == AOT_AAC_LTP)) {
       if (aac_dec_handle->samples_per_frame <= 512) {
+        aac_dec_handle->pstr_aac_dec_ch_info[ch]->str_ics_info.ltp2.lag =
+            aac_dec_handle->ptr_aac_dec_static_channel_info[ch]->ltp_lag_1;
         aac_dec_handle->pstr_aac_dec_ch_info[ch]->str_ics_info.ltp.lag =
-            aac_dec_handle->ptr_aac_dec_static_channel_info[ch]->ltp_lag;
+            aac_dec_handle->ptr_aac_dec_static_channel_info[ch]->ltp_lag_2;
       }
       aac_dec_handle->pstr_aac_dec_ch_info[ch]->ltp_buf =
           aac_dec_handle->ptr_aac_dec_static_channel_info[ch]->ltp_buf;
       aac_dec_handle->pstr_aac_dec_ch_info[ch]->ltp_lag =
-          aac_dec_handle->ptr_aac_dec_static_channel_info[ch]->ltp_lag;
+          aac_dec_handle->ptr_aac_dec_static_channel_info[ch]->ltp_lag_1;
     }
 
     aac_dec_handle->pstr_aac_dec_ch_info[ch]->scratch_buf_ptr = work_buffer_2;
@@ -868,6 +873,7 @@ WORD32 ixheaacd_aacdec_decodeframe(
       ele_type = ID_END;
       p_obj_exhaacplus_dec->aac_config.frame_status = 0;
       it_bit_buff->cnt_bits = 0;
+      aac_dec_handle->byte_align_bits = 0;
     } else {
       return err;
     }
@@ -893,7 +899,9 @@ WORD32 ixheaacd_aacdec_decodeframe(
 
   if (object_type == AOT_ER_AAC_LD) {
     for (ch = 0; ch < channel; ch++) {
-      aac_dec_handle->ptr_aac_dec_static_channel_info[ch]->ltp_lag =
+      aac_dec_handle->ptr_aac_dec_static_channel_info[ch]->ltp_lag_1 =
+          aac_dec_handle->pstr_aac_dec_ch_info[ch]->str_ics_info.ltp2.lag;
+      aac_dec_handle->ptr_aac_dec_static_channel_info[ch]->ltp_lag_2 =
           aac_dec_handle->pstr_aac_dec_ch_info[ch]->str_ics_info.ltp.lag;
     }
   }
@@ -973,7 +981,7 @@ WORD32 ixheaacd_aacdec_decodeframe(
           ixheaacd_drc_apply(pstr_drc_dec, spec_coef[ch],
                              str_ics_info[ch].window_sequence, ch,
                              str_ics_info[ch].frame_length,
-                             object_type);
+                             p_obj_exhaacplus_dec->aac_config.ui_enh_sbr, object_type);
         }
         if (skip_full_decode == 0) {
           ixheaacd_imdct_process(aac_dec_handle->pstr_aac_dec_overlap_info[ch],
@@ -1026,7 +1034,7 @@ WORD32 ixheaacd_aacdec_decodeframe(
             if (pstr_ec_state->fade_idx < MAX_FADE_FRAMES) {
               WORD32 fade_fac = ia_ec_fade_factors_fix[pstr_ec_state->fade_idx];
               for (k = 0; k < str_ics_info[ch].frame_length; k++) {
-                time_data[k] = ixheaacd_mul32_sh(time_data[k], fade_fac, 30);
+                time_data[k] = ixheaac_mul32_sh(time_data[k], fade_fac, 30);
               }
             } else {
               memset(time_data, 0, str_ics_info[ch].frame_length * sizeof(time_data[0]));
@@ -1057,7 +1065,7 @@ WORD32 ixheaacd_aacdec_decodeframe(
   *type = ele_type;
 
   aac_dec_handle->block_number =
-      ixheaacd_add32(aac_dec_handle->block_number, 1);
+      ixheaac_add32(aac_dec_handle->block_number, 1);
   if (p_obj_exhaacplus_dec->aac_config.ui_err_conceal && !is_init) {
     p_obj_exhaacplus_dec->aac_config.frame_status = aac_dec_handle->frame_status;
     return IA_NO_ERROR;
@@ -1116,8 +1124,10 @@ WORD32 ixheaacd_extension_payload(ia_bit_buf_struct *it_bit_buff, WORD32 *cnt,
       ixheaacd_read_bits_buf(it_bit_buff, 2);/*anc_type*/
       ixheaacd_read_bits_buf(it_bit_buff, 2);/*anc_start_stop*/
 
-      err = ixheaacd_ld_mps_frame_parsing(self, it_bit_buff);
-      if (err) return err;
+      if (self->ldmps_config.ldmps_present_flag == 1) {
+        err = ixheaacd_ld_mps_frame_parsing(self, it_bit_buff);
+        if (err) return err;
+      }
 
       *cnt = it_bit_buff->cnt_bits;
       break;

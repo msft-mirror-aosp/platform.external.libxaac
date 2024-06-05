@@ -26,8 +26,8 @@
 
 #include <vector>
 
-#include "ixheaacd_type_def.h"
-#include "ixheaacd_error_standards.h"
+#include "ixheaac_type_def.h"
+#include "ixheaac_error_standards.h"
 #include "ixheaacd_error_handler.h"
 #include "ixheaacd_apicmd_standards.h"
 #include "ixheaacd_memory_standards.h"
@@ -51,6 +51,13 @@
 #define MAX_CHANNEL_COUNT 8
 
 #define MAX_MEM_ALLOCS 100
+
+#define IA_MAX_OUTPUT_PCM_SIZE (3)
+#define IA_MAX_USAC_CH (2)
+#define IA_MAX_OUT_SAMPLES_PER_FRAME (4096)
+
+#define IA_DRC_DEC_IN_OUT_BUF_SIZE \
+  (IA_MAX_USAC_CH * IA_MAX_OUT_SAMPLES_PER_FRAME * IA_MAX_OUTPUT_PCM_SIZE)
 
 class Codec {
  public:
@@ -396,10 +403,7 @@ IA_ERRORCODE Codec::initMPEGDDDrc() {
                               pv_alloc_ptr);
   }
 
-  WORD32 ui_size;
-  ui_size = 8192 * 2;
-
-  mDrcInBuf = (int8_t*)malloc(ui_size);
+  mDrcInBuf = (int8_t*)malloc(IA_DRC_DEC_IN_OUT_BUF_SIZE);
   if (mDrcInBuf == nullptr) {
     return IA_FATAL_ERROR;
   }
@@ -408,7 +412,7 @@ IA_ERRORCODE Codec::initMPEGDDDrc() {
   err_code =
       ia_drc_dec_api(mMpegDDrcHandle, IA_API_CMD_SET_MEM_PTR, 2, mDrcInBuf);
 
-  mDrcOutBuf = (int8_t*)malloc(ui_size);
+  mDrcOutBuf = (int8_t*)malloc(IA_DRC_DEC_IN_OUT_BUF_SIZE);
   if (mDrcOutBuf == nullptr) {
     return IA_FATAL_ERROR;
   }
@@ -845,6 +849,7 @@ IA_ERRORCODE Codec::setXAACDRCInfo(int32_t drcCut, int32_t drcBoost,
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   int status;
+  int num_proc_iterations = 0;
   if (size < 1) return 0;
   Codec* codec = new Codec();
   bool isADTS = false;
@@ -863,6 +868,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
       data += bytesConsumed;
       status = codec->decodeXAACStream((uint8_t*)data, size, &bytesConsumed,
                                        &numOutBytes);
+      num_proc_iterations++;
+      /* Stop processing after 500 frames */
+      if (num_proc_iterations > 500)
+        break;
+
       /* If decoder doesn't consume any bytes, advance by 4 bytes */
       if (0 == bytesConsumed) bytesConsumed = 4;
     }

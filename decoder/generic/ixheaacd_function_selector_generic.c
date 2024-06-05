@@ -20,15 +20,15 @@
 #include <stdio.h>
 #include <string.h>
 #include "ixheaacd_sbr_common.h"
-#include "ixheaacd_type_def.h"
+#include "ixheaac_type_def.h"
 
-#include "ixheaacd_constants.h"
-#include "ixheaacd_basic_ops32.h"
-#include "ixheaacd_basic_ops16.h"
-#include "ixheaacd_basic_ops40.h"
-#include "ixheaacd_basic_ops.h"
+#include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops16.h"
+#include "ixheaac_basic_ops40.h"
+#include "ixheaac_basic_ops.h"
 
-#include "ixheaacd_basic_op.h"
+#include "ixheaac_basic_op.h"
 #include "ixheaacd_intrinsics.h"
 #include "ixheaacd_common_rom.h"
 #include "ixheaacd_sbrdecsettings.h"
@@ -76,6 +76,10 @@ VOID(*ixheaacd_covariance_matrix_calc)
 VOID(*ixheaacd_covariance_matrix_calc_960)
 (WORD32 *, ia_lpp_trans_cov_matrix *,
  WORD32, WORD32) = &ixheaacd_covariance_matrix_calc_dec_960;
+
+VOID(*ixheaacd_aac_ld_dec_rearrange_960)
+(WORD32 *ip, WORD32 *op, WORD32 mdct_len_2,
+ WORD16 *re_arr_tab) = &ixheaacd_dec_rearrange_short;
 
 VOID(*ixheaacd_covariance_matrix_calc_2)
 (ia_lpp_trans_cov_matrix *, WORD32 *, WORD32,
