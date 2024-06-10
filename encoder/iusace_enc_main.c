@@ -504,6 +504,76 @@ WORD32 iusace_limitbitrate(WORD32 core_sample_rate, WORD32 frame_len, WORD32 num
   return bit_rate;
 }
 
+WORD32 iusace_map_sample_rate(WORD32 sample_rate)
+{
+  WORD32 mapped_sample_rate = sample_rate;
+
+  if ((mapped_sample_rate >= 0) && (mapped_sample_rate < 9391))
+  {
+    mapped_sample_rate = 8000;
+  }
+  else if ((mapped_sample_rate >= 9391) && (mapped_sample_rate < 11502))
+  {
+    mapped_sample_rate = 11025;
+  }
+  else if ((mapped_sample_rate >= 11502) && (mapped_sample_rate < 13856))
+  {
+    mapped_sample_rate = 12000;
+  }
+  else if ((mapped_sample_rate >= 13856) && (mapped_sample_rate < 18783))
+  {
+    mapped_sample_rate = 16000;
+  }
+  else if ((mapped_sample_rate >= 18783) && (mapped_sample_rate < 23004))
+  {
+    mapped_sample_rate = 22050;
+  }
+  else if ((mapped_sample_rate >= 23004) && (mapped_sample_rate < 27713))
+  {
+    mapped_sample_rate = 24000;
+  }
+  else if ((mapped_sample_rate >= 27713) && (mapped_sample_rate < 37566))
+  {
+    mapped_sample_rate = 32000;
+  }
+  else if ((mapped_sample_rate >= 37566) && (mapped_sample_rate < 46009))
+  {
+    mapped_sample_rate = 44100;
+  }
+  else if ((mapped_sample_rate >= 46009) && (mapped_sample_rate < 55426))
+  {
+    mapped_sample_rate = 48000;
+  }
+  else if ((mapped_sample_rate >= 55426) && (mapped_sample_rate < 75132))
+  {
+    mapped_sample_rate = 64000;
+  }
+  else if ((mapped_sample_rate >= 75132) && (mapped_sample_rate < 92017))
+  {
+    mapped_sample_rate = 88200;
+  }
+  else if (mapped_sample_rate >= 92017)
+  {
+    mapped_sample_rate = 96000;
+  }
+  else
+  {
+    mapped_sample_rate = 48000;
+  }
+  return mapped_sample_rate;
+}
+
+/**
+ *  iusace_enc_init
+ *
+ *  \brief Enocder initialization
+ *
+ *  \param [in] ptr_usac_config  Pointer to encoder config structure
+ *  \param [in] ptr_asc          Pointer to audio specific config strcuture
+ *  \param [in] pstr_state       Poniter to encoder handle structure
+ *
+ *  \return IA_ERRORCODE         Error code
+ */
 IA_ERRORCODE iusace_enc_init(ia_usac_encoder_config_struct *ptr_usac_config,
                              ixheaace_audio_specific_config_struct *pstr_asc,
                              ia_usac_data_struct *pstr_state) {
@@ -516,6 +586,7 @@ IA_ERRORCODE iusace_enc_init(ia_usac_encoder_config_struct *ptr_usac_config,
   WORD32 nbuff = 2048;
   usac_data->usac_independency_flag_count = 0;
   usac_data->usac_independency_flag_interval = 25;
+  usac_data->use_acelp_only = ptr_usac_config->use_acelp_only;
   for (j = 0; j < MAX_TIME_CHANNELS; j++) {
     memset(usac_data->overlap_buf[j], 0, nbuff * sizeof(FLOAT64 *));
 
@@ -547,7 +618,14 @@ IA_ERRORCODE iusace_enc_init(ia_usac_encoder_config_struct *ptr_usac_config,
       p_audio_specific_config->channel_configuration = ptr_usac_config->channels;
     }
   }
-
+  ia_usac_enc_element_config_struct *pstr_usac_elem_config =
+      &(pstr_asc_usac_config->str_usac_element_config[pstr_asc_usac_config->num_elements]);
+  pstr_asc_usac_config->usac_element_type[pstr_asc_usac_config->num_elements] = ID_USAC_EXT;
+  pstr_usac_elem_config->usac_ext_ele_type = ID_EXT_ELE_AUDIOPREROLL;
+  pstr_usac_elem_config->usac_ext_ele_dflt_len_present = 0;
+  pstr_usac_elem_config->usac_ext_ele_payload_present = 0;
+  pstr_usac_elem_config->usac_ext_ele_cfg_len = 0;
+  pstr_asc_usac_config->num_elements++;
   // DRC Config
   if (ptr_usac_config->use_drc_element) {
     ptr_usac_config->str_drc_cfg.str_uni_drc_config.str_channel_layout.base_ch_count =
@@ -557,35 +635,50 @@ IA_ERRORCODE iusace_enc_init(ia_usac_encoder_config_struct *ptr_usac_config,
 
     err_code = impd_drc_enc_init(&usac_data->str_drc_state, pstr_state->str_scratch.drc_scratch,
                                  &ptr_usac_config->str_drc_cfg);
-    if (err_code == IA_EXHEAACE_EXE_NONFATAL_USAC_INVALID_GAIN_POINTS) {
-      ptr_usac_config->use_drc_element = 0;
-    }
     if (err_code & IA_FATAL_ERROR) {
       return err_code;
+    }
+    if (err_code) {
+      ptr_usac_config->use_drc_element = 0;
+      err_code = IA_NO_ERROR;
     }
 
     if (ptr_usac_config->use_drc_element) {
       ia_usac_enc_element_config_struct *pstr_usac_elem_config =
-        &(pstr_asc_usac_config->str_usac_element_config[pstr_asc_usac_config->num_elements]);
+          &(pstr_asc_usac_config->str_usac_element_config[pstr_asc_usac_config->num_elements]);
       pstr_asc_usac_config->usac_element_type[pstr_asc_usac_config->num_elements] = ID_USAC_EXT;
       pstr_usac_elem_config->usac_ext_ele_type = ID_EXT_ELE_UNI_DRC;
       pstr_usac_elem_config->usac_ext_ele_dflt_len_present = 0;
       pstr_usac_elem_config->usac_ext_ele_payload_present = 0;
       pstr_usac_elem_config->drc_config_data = usac_data->str_drc_state.bit_buf_base_cfg;
       pstr_usac_elem_config->usac_ext_ele_cfg_len =
-        (usac_data->str_drc_state.drc_config_data_size_bit + 7) >> 3;
+          (usac_data->str_drc_state.drc_config_data_size_bit + 7) >> 3;
       pstr_asc_usac_config->num_elements++;
     }
+  } else {
+    err_code =
+        impd_loudness_info_init(&usac_data->str_drc_state, &ptr_usac_config->str_drc_cfg);
+    if (err_code) {
+      return err_code;
+    }
   }
-  if (ptr_usac_config->use_drc_element)  // For Loudness
-  {
-    pstr_asc_usac_config->usac_config_ext_type[pstr_asc_usac_config->num_config_extensions] =
-        ID_CONFIG_EXT_LOUDNESS_INFO;
-    pstr_asc_usac_config->usac_config_ext_len[pstr_asc_usac_config->num_config_extensions] =
-        (usac_data->str_drc_state.drc_config_ext_data_size_bit + 7) >> 3;
-    pstr_asc_usac_config->usac_config_ext_buf[pstr_asc_usac_config->num_config_extensions] =
-        usac_data->str_drc_state.bit_buf_base_cfg_ext;
-    pstr_asc_usac_config->num_config_extensions++;
+
+  pstr_asc_usac_config->usac_config_ext_type[pstr_asc_usac_config->num_config_extensions] =
+      ID_CONFIG_EXT_STREAM_ID;
+  pstr_asc_usac_config->usac_config_ext_len[pstr_asc_usac_config->num_config_extensions] =
+      CONFIG_EXT_LEN_STREAM_ID;
+  pstr_asc_usac_config->num_config_extensions++;
+  pstr_asc_usac_config->stream_identifier = ptr_usac_config->stream_id;
+
+  pstr_asc_usac_config->usac_config_ext_type[pstr_asc_usac_config->num_config_extensions] =
+      ID_CONFIG_EXT_LOUDNESS_INFO;
+  pstr_asc_usac_config->usac_config_ext_len[pstr_asc_usac_config->num_config_extensions] =
+      (usac_data->str_drc_state.drc_config_ext_data_size_bit + 7) >> 3;
+  pstr_asc_usac_config->usac_config_ext_buf[pstr_asc_usac_config->num_config_extensions] =
+      usac_data->str_drc_state.bit_buf_base_cfg_ext;
+  pstr_asc_usac_config->num_config_extensions++;
+
+  if (pstr_asc_usac_config->num_config_extensions) {
     pstr_asc_usac_config->usac_cfg_ext_present = 1;
   }
 
@@ -696,7 +789,10 @@ IA_ERRORCODE iusace_enc_init(ia_usac_encoder_config_struct *ptr_usac_config,
        ch_idx < pstr_asc_usac_config->num_elements - ptr_usac_config->num_ext_elements;
        ch_idx++) {
     iusace_psy_mod_init(
-        &usac_data->str_psy_mod, (ptr_usac_config->core_sample_rate),
+        &usac_data->str_psy_mod,
+        ((LEN_SUPERFRAME_768 == ptr_usac_config->ccfl) && (0 == ptr_usac_config->sbr_enable)) ?
+        (iusace_map_sample_rate((ptr_usac_config->core_sample_rate * 4) / 3)) :
+        (ptr_usac_config->core_sample_rate),
         usac_data->str_qc_main.str_qc_data[ch_idx].ch_bitrate, ptr_usac_config->bw_limit[ch_idx],
         usac_data->str_qc_main.str_qc_data[ch_idx].num_ch, i_ch, ch_idx, ptr_usac_config->ccfl);
     i_ch += usac_data->str_qc_main.str_qc_data[ch_idx].num_ch;
@@ -704,7 +800,7 @@ IA_ERRORCODE iusace_enc_init(ia_usac_encoder_config_struct *ptr_usac_config,
 
   for (; elem_idx < pstr_asc_usac_config->num_elements; elem_idx++) {
     idx = elem_idx - pstr_asc_usac_config->num_ext_elements;
-    pstr_asc_usac_config->str_usac_element_config[idx].noise_filling =
+    pstr_asc_usac_config->str_usac_element_config[elem_idx].noise_filling =
         usac_data->noise_filling[idx];
     usac_data->channel_elem_type[idx] = pstr_asc_usac_config->usac_element_type[elem_idx];
   }
@@ -718,6 +814,8 @@ IA_ERRORCODE iusace_enc_init(ia_usac_encoder_config_struct *ptr_usac_config,
     pstr_usac_elem_config->usac_ext_ele_dflt_len_present = 0;
     pstr_usac_elem_config->usac_ext_ele_payload_present = 0;
     pstr_asc_usac_config->num_elements++;
+    ptr_usac_config->num_ext_elements++;
+    ptr_usac_config->num_elements++;
   }
 
   if (ptr_usac_config->codec_mode == USAC_SWITCHED) {
@@ -807,6 +905,9 @@ IA_ERRORCODE iusace_enc_init(ia_usac_encoder_config_struct *ptr_usac_config,
                                     usac_data->td_bitrate[i_ch]);
 
       usac_data->acelp_core_mode[i_ch] = (usac_data->td_encoder[i_ch])->acelp_core_mode;
+      if (ptr_usac_config->core_sample_rate == 8000) {
+        usac_data->use_acelp_only = 1;
+      }
     }
   } else {
     usac_data->acelp_core_mode[0] = 0;
@@ -968,7 +1069,7 @@ IA_ERRORCODE ixheaace_usac_encode(FLOAT32 **ptr_input,
   WORD32 len_next_high_rate;
   WORD8 elem_idx, nr_core_coder_channels = 0, chn = 0;
   WORD32 ch_offset = 0;
-  WORD32 elem_idx_max = ptr_usac_config->num_elements;
+  WORD32 elem_idx_max = ptr_usac_config->num_elements - ptr_usac_config->num_ext_elements;
   WORD32 td_buffer_offset = (TD_BUFFER_OFFSET * ptr_usac_config->ccfl) / FRAME_LEN_LONG;
   usac_independency_flg = ptr_usac_data->usac_independency_flag;
 
@@ -986,15 +1087,16 @@ IA_ERRORCODE ixheaace_usac_encode(FLOAT32 **ptr_input,
     ptr_usac_data->min_bits_needed = 0;
   }
 
-  if (ptr_usac_config->use_drc_element == 1) {
-    elem_idx_max -= 1;
-  }
-
   num_bits = 0;
-
-  iusace_write_bits_buf(pstr_it_bit_buff, usac_independency_flg, 1);
-  num_bits++;
-
+  if (ptr_usac_config->preroll_flag) {
+    if (ptr_usac_config->iframes_interval != ptr_usac_config->num_preroll_frames) {
+      iusace_write_bits_buf(pstr_it_bit_buff, usac_independency_flg, 1);
+      num_bits++;
+    }
+  } else {
+    iusace_write_bits_buf(pstr_it_bit_buff, usac_independency_flg, 1);
+    num_bits++;
+  }
   for (elem_idx = 0; elem_idx < elem_idx_max; elem_idx++) {
     switch (ptr_usac_data->channel_elem_type[elem_idx]) {
       case USAC_ELEMENT_TYPE_SCE:
@@ -1071,8 +1173,11 @@ IA_ERRORCODE ixheaace_usac_encode(FLOAT32 **ptr_input,
         new_win_seq[i_ch] = ptr_usac_data->block_switch_ctrl[i_ch].next_win_seq;
       }
 
-      err = iusace_sfb_params_init(ptr_usac_config->core_sample_rate, ptr_usac_config->ccfl,
-                                   pstr_sfb_prms->sfb_width_table[i_ch],
+      err = iusace_sfb_params_init(((LEN_SUPERFRAME_768 == ptr_usac_config->ccfl) &&
+                                  (0 == ptr_usac_config->sbr_enable)) ?
+                                  (iusace_map_sample_rate((ptr_usac_config->core_sample_rate
+                                   * 4) / 3)) :(ptr_usac_config->core_sample_rate),
+                                   ptr_usac_config->ccfl, pstr_sfb_prms->sfb_width_table[i_ch],
                                    &pstr_sfb_prms->num_sfb[i_ch],
                                    pstr_sfb_prms->window_sequence[i_ch]);
 
@@ -1209,7 +1314,12 @@ IA_ERRORCODE ixheaace_usac_encode(FLOAT32 **ptr_input,
         }
       }
     }
-
+    if (ptr_usac_config->preroll_flag) {
+      if (ptr_usac_config->iframes_interval != ptr_usac_config->num_preroll_frames) {
+        iusace_write_bits_buf(pstr_it_bit_buff, 0, 1);  // extension element present
+        num_bits++;
+      }
+    }
     if (ptr_usac_config->use_drc_element) {
       WORD32 num_bits_ext_elem = 0;
       err = iusace_enc_ext_elemts(ID_EXT_ELE_UNI_DRC, ptr_usac_config, pstr_state, pstr_asc,
