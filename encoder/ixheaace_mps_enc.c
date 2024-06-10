@@ -33,7 +33,6 @@
 #include "ixheaace_mps_defines.h"
 #include "ixheaace_mps_common_define.h"
 #include "ixheaac_constants.h"
-#include "ixheaace_aac_constants.h"
 #include "ixheaace_bitbuffer.h"
 #include "ixheaace_sbr_def.h"
 #include "ixheaace_mps_buf.h"
@@ -417,17 +416,19 @@ static IA_ERRORCODE ixheaace_mps_212_encode(
   }
   pstr_frame_data = &pstr_space_enc->pstr_bitstream_formatter->frame;
 
-  if (pstr_space_enc->num_discard_out_frames > 0) {
-    pstr_space_enc->independency_count = 0;
-    pstr_space_enc->independency_flag = 1;
-  } else {
-    pstr_space_enc->independency_flag = (pstr_space_enc->independency_count == 0) ? 1 : 0;
-    if (pstr_space_enc->independency_factor > 0) {
-      pstr_space_enc->independency_count++;
-      pstr_space_enc->independency_count =
-          pstr_space_enc->independency_count % ((WORD32)pstr_space_enc->independency_factor);
+  if (aot != AOT_USAC) {
+    if (pstr_space_enc->num_discard_out_frames > 0) {
+      pstr_space_enc->independency_count = 0;
+      pstr_space_enc->independency_flag = 1;
     } else {
-      pstr_space_enc->independency_count = -1;
+      pstr_space_enc->independency_flag = (pstr_space_enc->independency_count == 0) ? 1 : 0;
+      if (pstr_space_enc->independency_factor > 0) {
+        pstr_space_enc->independency_count++;
+        pstr_space_enc->independency_count =
+            pstr_space_enc->independency_count % ((WORD32)pstr_space_enc->independency_factor);
+      } else {
+        pstr_space_enc->independency_count = -1;
+      }
     }
   }
 
@@ -1048,7 +1049,7 @@ WORD32 ixheaace_mps_515_scratch_size(VOID) {
            sizeof(FLOAT32));
   size += (INPUT_LEN_DOWNSAMPLE * IXHEAACE_MAX_CH_IN_BS_ELE * UPSAMPLE_FAC * sizeof(FLOAT32));
   size += (INPUT_LEN_DOWNSAMPLE * IXHEAACE_MAX_CH_IN_BS_ELE * UPSAMPLE_FAC * sizeof(FLOAT32));
-  size = IXHEAACE_GET_SIZE_ALIGNED(size, BYTE_ALIGN_8);
+  size = IXHEAAC_GET_SIZE_ALIGNED(size, BYTE_ALIGN_8);
   return size;
 }
 
