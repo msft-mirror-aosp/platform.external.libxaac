@@ -503,7 +503,7 @@ cc_library_static {
         "encoder/drc_src/impd_drc_tables.c",
         "encoder/drc_src/impd_drc_uni_drc_eq.c",
         "encoder/drc_src/impd_drc_uni_drc_filter_bank.c",
-        ],
+    ],
 
     sanitize: {
         misc_undefined: [
