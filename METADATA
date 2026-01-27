@@ -14,6 +14,7 @@ third_party {
   identifier {
     type: "Git"
     value: "https://github.com/ittiam-systems/libxaac.git"
-    version: "v0.1.12"
+    version: "7492f1f9abb4008758c00d0e9dabd1c12bd7cc25"
+    closest_version: "v0.1.12"
   }
 }
