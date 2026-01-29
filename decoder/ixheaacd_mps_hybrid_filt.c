@@ -435,11 +435,11 @@ VOID ixheaacd_mps_fft(complex *out, LOOPINDEX idx, WORD32 nob,
     re_temp = out2_w32[0];
     im_temp = out2_w32[1];
 
-    out2_w32[0] = (out1_w32[0] - re_temp);
-    out2_w32[1] = (out1_w32[1] - im_temp);
+    out2_w32[0] = ixheaac_sub32_sat(out1_w32[0], re_temp);
+    out2_w32[1] = ixheaac_sub32_sat(out1_w32[1], im_temp);
 
-    out1_w32[0] = (re_temp + out1_w32[0]);
-    out1_w32[1] = (im_temp + out1_w32[1]);
+    out1_w32[0] = ixheaac_add32_sat(re_temp, out1_w32[0]);
+    out1_w32[1] = ixheaac_add32_sat(im_temp, out1_w32[1]);
 
     out1_w32 += 4;
     out2_w32 += 4;
@@ -464,11 +464,11 @@ VOID ixheaacd_mps_fft(complex *out, LOOPINDEX idx, WORD32 nob,
       re_temp = out1_w32[0];
       im_temp = out1_w32[1];
 
-      out1_w32[0] = (re_temp + out2_w32[0]) >> 1;
-      out1_w32[1] = (im_temp + out2_w32[1]) >> 1;
+      out1_w32[0] = ((WORD64)re_temp + (WORD64)out2_w32[0]) >> 1;
+      out1_w32[1] = ((WORD64)im_temp + (WORD64)out2_w32[1]) >> 1;
 
-      out2_w32[0] = (re_temp - out2_w32[0]) >> 1;
-      out2_w32[1] = (im_temp - out2_w32[1]) >> 1;
+      out2_w32[0] = ((WORD64)re_temp - (WORD64)out2_w32[0]) >> 1;
+      out2_w32[1] = ((WORD64)im_temp - (WORD64)out2_w32[1]) >> 1;
 
       index1 = tab_modifier;
 
@@ -487,11 +487,11 @@ VOID ixheaacd_mps_fft(complex *out, LOOPINDEX idx, WORD32 nob,
         out1_w32[inner] >>= 1;
         out1_w32[inner + 1] >>= 1;
 
-        out2_w32[inner] = out1_w32[inner] - re_temp;
-        out2_w32[inner + 1] = out1_w32[inner + 1] - im_temp;
+        out2_w32[inner] = ixheaac_sub32_sat(out1_w32[inner], re_temp);
+        out2_w32[inner + 1] = ixheaac_sub32_sat(out1_w32[inner + 1], im_temp);
 
-        out1_w32[inner] = (out1_w32[inner] + re_temp);
-        out1_w32[inner + 1] = (out1_w32[inner + 1] + im_temp);
+        out1_w32[inner] = ixheaac_add32_sat(out1_w32[inner], re_temp);
+        out1_w32[inner + 1] = ixheaac_add32_sat(out1_w32[inner + 1], im_temp);
 
         index1 += tab_modifier;
       }
@@ -520,8 +520,8 @@ VOID ixheaacd_8ch_filtering(const WORD32 *p_qmf_real, const WORD32 *p_qmf_imag,
                          ixheaac_mult32x16in32(p_qmf_imag[12], p8_13[12])),
                         1);
 
-  cum[5] = imag - real;
-  cum[4] = -(imag + real);
+  cum[5] = ixheaac_sub32_sat(imag, real);
+  cum[4] = -ixheaac_add32_sat(imag, real);
 
   real = ixheaac_shl32((ixheaac_mult32x16in32(p_qmf_real[3], p8_13[3]) +
                          ixheaac_mult32x16in32(p_qmf_real[11], p8_13[11])),
@@ -535,9 +535,12 @@ VOID ixheaacd_8ch_filtering(const WORD32 *p_qmf_real, const WORD32 *p_qmf_imag,
   cum[12] = ixheaac_shl32(
       -((ixheaac_mult32x16in32(imag, tsin) + ixheaac_mult32x16in32(real, tcos))), 1);
 
-  cum[2] = ixheaac_shl32(ixheaac_mult32x16in32((p_qmf_real[2] - p_qmf_real[10]), p8_13[10]), 1);
-  cum[3] = ixheaac_shl32(ixheaac_mult32x16in32((p_qmf_imag[2] - p_qmf_imag[10]), p8_13[2]), 1);
-
+  cum[2] = ixheaac_shl32((ixheaac_mult32x16in32(p_qmf_real[2], p8_13[10]) -
+                          ixheaac_mult32x16in32(p_qmf_real[10], p8_13[10])),
+                         1);
+  cum[3] = ixheaac_shl32((ixheaac_mult32x16in32(p_qmf_imag[2], p8_13[2]) -
+                          ixheaac_mult32x16in32(p_qmf_imag[10], p8_13[2])),
+                         1);
   real = ixheaac_shl32((ixheaac_mult32x16in32(p_qmf_real[1], p8_13[1]) +
                          ixheaac_mult32x16in32(p_qmf_real[9], p8_13[9])),
                         1);
@@ -557,8 +560,8 @@ VOID ixheaacd_8ch_filtering(const WORD32 *p_qmf_real, const WORD32 *p_qmf_imag,
                          ixheaac_mult32x16in32(p_qmf_imag[8], p8_13[8])),
                         1);
 
-  cum[7] = imag + real;
-  cum[6] = imag - real;
+  cum[7] = ixheaac_add32_sat(imag, real);
+  cum[6] = ixheaac_sub32_sat(imag, real);
 
   cum[15] = ixheaac_shl32((ixheaac_mult32x16in32(p_qmf_imag[7], p8_13[14]) +
                             ixheaac_mult32x16in32(p_qmf_real[7], p8_13[13])),
@@ -597,13 +600,13 @@ VOID ixheaacd_2ch_filtering(WORD32 *p_qmf, WORD32 *m_hybrid,
 
   cum0 = (WORD32)p_qmf[HYBRID_FILTER_DELAY] >> 1;
 
-  temp = (WORD64)((WORD64)p2_6[0] * (WORD64)(p_qmf[1] + p_qmf[11]) +
-                  (WORD64)p2_6[1] * (WORD64)(p_qmf[3] + p_qmf[9]));
-  temp += (WORD64)p2_6[2] * (WORD64)(p_qmf[5] + p_qmf[7]);
+  temp = (WORD64)((WORD64)p2_6[0] * ((WORD64)p_qmf[1] + (WORD64)p_qmf[11]) +
+                  (WORD64)p2_6[1] * ((WORD64)p_qmf[3] + (WORD64)p_qmf[9]));
+  temp += (WORD64)p2_6[2] * ((WORD64)p_qmf[5] + (WORD64)p_qmf[7]);
   cum1 = (WORD32)(temp >> 16);
 
-  m_hybrid[0] = cum0 + cum1;
-  m_hybrid[1] = cum0 - cum1;
+  m_hybrid[0] = ixheaac_add32_sat(cum0, cum1);
+  m_hybrid[1] = ixheaac_sub32_sat(cum0, cum1);
 }
 
 WORD32 ixheaacd_get_qmf_sb(
@@ -757,15 +760,15 @@ VOID ixheaacd_apply_ana_hyb_filt_bank_create_x(
     *p_hybrid_re++ = m_temp_output_real[7];
     *p_hybrid_re++ = m_temp_output_real[0];
     *p_hybrid_re++ = m_temp_output_real[1];
-    *p_hybrid_re++ = (m_temp_output_real[2] + m_temp_output_real[5]);
-    *p_hybrid_re++ = (m_temp_output_real[3] + m_temp_output_real[4]);
+    *p_hybrid_re++ = ixheaac_add32_sat(m_temp_output_real[2], m_temp_output_real[5]);
+    *p_hybrid_re++ = ixheaac_add32_sat(m_temp_output_real[3], m_temp_output_real[4]);
 
     *p_hybrid_im++ = m_temp_output_imag[6];
     *p_hybrid_im++ = m_temp_output_imag[7];
     *p_hybrid_im++ = m_temp_output_imag[0];
     *p_hybrid_im++ = m_temp_output_imag[1];
-    *p_hybrid_im++ = (m_temp_output_imag[2] + m_temp_output_imag[5]);
-    *p_hybrid_im++ = (m_temp_output_imag[3] + m_temp_output_imag[4]);
+    *p_hybrid_im++ = ixheaac_add32_sat(m_temp_output_imag[2], m_temp_output_imag[5]);
+    *p_hybrid_im++ = ixheaac_add32_sat(m_temp_output_imag[3], m_temp_output_imag[4]);
 
     ixheaacd_2ch_filtering(
         &(hyb_state->buffer_lf_real[1][time_slot + nr_samples_shift_lf + 1 - PROTO_LEN]),
@@ -820,6 +823,7 @@ VOID ixheaacd_apply_ana_hyb_filt_bank_create_x(
   }
 }
 
+ATTR_NO_SANITIZE_INTEGER
 VOID ixheaacd_apply_ana_hyb_filt_bank_merge_res_decor(
     ia_mps_dec_thyb_filter_state_struct *hyb_state, WORD32 *m_qmf_real, WORD32 *m_qmf_imag,
     WORD32 nr_bands, WORD32 nr_samples, WORD32 *m_hybrid_real, WORD32 *m_hybrid_imag,
@@ -1160,13 +1164,13 @@ VOID ixheaacd_apply_ana_hyb_filt_bank_create_x_res(
     *p_hybrid_im++ = m_temp_output_imag[1];
 
     if (*counter > 4) {
-      *p_hybrid_re++ = (m_temp_output_real[2] + m_temp_output_real[5]);
-      *p_hybrid_im++ = (m_temp_output_imag[2] + m_temp_output_imag[5]);
+      *p_hybrid_re++ = ixheaac_add32_sat(m_temp_output_real[2], m_temp_output_real[5]);
+      *p_hybrid_im++ = ixheaac_add32_sat(m_temp_output_imag[2], m_temp_output_imag[5]);
     }
 
     if (*counter > 5) {
-      *p_hybrid_re++ = (m_temp_output_real[3] + m_temp_output_real[4]);
-      *p_hybrid_im++ = (m_temp_output_imag[3] + m_temp_output_imag[4]);
+      *p_hybrid_re++ = ixheaac_add32_sat(m_temp_output_real[3], m_temp_output_real[4]);
+      *p_hybrid_im++ = ixheaac_add32_sat(m_temp_output_imag[3], m_temp_output_imag[4]);
     }
 
     ch_off_set = 6;

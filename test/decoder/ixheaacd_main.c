@@ -506,18 +506,18 @@ IA_ERRORCODE ixheaacd_set_config_param(WORD32 argc, pWORD8 argv[],
 #ifdef DRC_ENABLE
     if (!strncmp((pCHAR8)argv[i], "-drc_cut_fac:", 13)) {
       pCHAR8 pb_arg_val = (pCHAR8)(argv[i] + 13);
-      UWORD32 ui_drc_cut = atoi(pb_arg_val);
+      FLOAT32 drc_cut = (FLOAT32)atof(pb_arg_val);
       err_code = (*p_ia_process_api)(
           p_ia_process_api_obj, IA_API_CMD_SET_CONFIG_PARAM,
-          IA_XHEAAC_DEC_CONFIG_PARAM_DRC_CUT, &ui_drc_cut);
+          IA_XHEAAC_DEC_CONFIG_PARAM_DRC_CUT, &drc_cut);
       _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
     }
     if (!strncmp((pCHAR8)argv[i], "-drc_boost_fac:", 15)) {
       pCHAR8 pb_arg_val = (pCHAR8)(argv[i] + 15);
-      UWORD32 ui_drc_boost = atoi(pb_arg_val);
+      FLOAT32 drc_boost = (FLOAT32)atof(pb_arg_val);
       err_code = (*p_ia_process_api)(
           p_ia_process_api_obj, IA_API_CMD_SET_CONFIG_PARAM,
-          IA_XHEAAC_DEC_CONFIG_PARAM_DRC_BOOST, &ui_drc_boost);
+          IA_XHEAAC_DEC_CONFIG_PARAM_DRC_BOOST, &drc_boost);
       _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
     }
     if (!strncmp((pCHAR8)argv[i], "-drc_target_level:", 18)) {
@@ -667,6 +667,18 @@ IA_ERRORCODE ixheaacd_set_config_param(WORD32 argc, pWORD8 argv[],
       _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
       ec_enable = ui_err_conceal;
     }
+#ifdef LOUDNESS_LEVELING_SUPPORT
+    /* For loudness leveling*/
+    if (!strncmp((pCHAR8)argv[i], "-loudness_leveling:", 19)) {
+      pCHAR8 pb_arg_val = (pCHAR8)(argv[i] + 19);
+      UWORD32 loudness_leveling_flag = atoi(pb_arg_val);
+      err_code = (*p_ia_process_api)(p_ia_process_api_obj, IA_API_CMD_SET_CONFIG_PARAM,
+                                     IA_XHEAAC_DEC_CONFIG_PARAM_DRC_LOUDNESS_LEVELING,
+                                     &loudness_leveling_flag);
+      _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
+      mpeg_d_drc_on = 1;
+    }
+#endif
   }
 
   return IA_NO_ERROR;
@@ -899,7 +911,13 @@ int ixheaacd_main_process(WORD32 argc, pWORD8 argv[]) {
   WORD32 drc_flag = 0;
   WORD32 mpegd_drc_present = 0;
   WORD32 uo_num_chan;
-
+  FLOAT32 f_boost = 0;
+  FLOAT32 f_cut = 0;
+  UWORD8 ui_drc_mode_cut = 0;
+  UWORD8 ui_drc_mode_boost = 0;
+#ifdef LOUDNESS_LEVELING_SUPPORT
+  WORD32 i_loudness_leveling_flag = 1;
+#endif
   /* The process API function */
   IA_ERRORCODE(*p_ia_process_api)
   (pVOID p_ia_process_api_obj, WORD32 i_cmd, WORD32 i_idx, pVOID pv_value);
@@ -1408,6 +1426,59 @@ int ixheaacd_main_process(WORD32 argc, pWORD8 argv[]) {
           pv_ia_drc_process_api_obj, IA_API_CMD_SET_CONFIG_PARAM,
           IA_DRC_DEC_CONFIG_DRC_TARGET_LOUDNESS, &i_target_loudness);
       _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
+    }
+
+#ifdef LOUDNESS_LEVELING_SUPPORT
+    /*Set loudness leveling */
+
+    {
+      err_code = (*p_ia_process_api)(pv_ia_process_api_obj, IA_API_CMD_GET_CONFIG_PARAM,
+                                     IA_XHEAAC_DEC_CONFIG_PARAM_DRC_LOUDNESS_LEVELING,
+                                     &i_loudness_leveling_flag);
+      _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
+
+      err_code =
+          ia_drc_dec_api(pv_ia_drc_process_api_obj, IA_API_CMD_SET_CONFIG_PARAM,
+                         IA_DRC_DEC_CONFIG_DRC_LOUDNESS_LEVELING, &i_loudness_leveling_flag);
+      _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
+    }
+#endif
+
+    /*Set cut */
+
+    {
+      err_code = (*p_ia_process_api)(pv_ia_process_api_obj, IA_API_CMD_GET_CONFIG_PARAM,
+                                     IA_XHEAAC_DEC_CONFIG_PARAM_DRC_MODE_CUT, &ui_drc_mode_cut);
+      _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
+
+      if (ui_drc_mode_cut) {
+        err_code = (*p_ia_process_api)(pv_ia_process_api_obj, IA_API_CMD_GET_CONFIG_PARAM,
+                                       IA_XHEAAC_DEC_CONFIG_PARAM_DRC_CUT, &f_cut);
+        _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
+
+        err_code = ia_drc_dec_api(pv_ia_drc_process_api_obj, IA_API_CMD_SET_CONFIG_PARAM,
+                                  IA_DRC_DEC_CONFIG_DRC_CUT, &f_cut);
+        _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
+      }
+    }
+
+    /*Set boost */
+
+    {
+      err_code =
+          (*p_ia_process_api)(pv_ia_process_api_obj, IA_API_CMD_GET_CONFIG_PARAM,
+                              IA_XHEAAC_DEC_CONFIG_PARAM_DRC_MODE_BOOST, &ui_drc_mode_boost);
+      _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
+
+      if (ui_drc_mode_boost) {
+        err_code = (*p_ia_process_api)(pv_ia_process_api_obj, IA_API_CMD_GET_CONFIG_PARAM,
+                                       IA_XHEAAC_DEC_CONFIG_PARAM_DRC_BOOST, &f_boost);
+        _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
+
+        err_code = ia_drc_dec_api(pv_ia_drc_process_api_obj, IA_API_CMD_SET_CONFIG_PARAM,
+                                  IA_DRC_DEC_CONFIG_DRC_BOOST, &f_boost);
+        _IA_HANDLE_ERROR(p_proc_err_info, (pWORD8) "", err_code);
+      }
     }
 
     /*Set loud_norm_flag*/
@@ -2238,6 +2309,9 @@ void print_usage() {
   printf("\n[-peak_limiter_off:<peak_limiter_off_flag>]");
   printf("\n[-err_conceal:<error_concealment_flag>]");
   printf("\n[-esbr:<esbr_flag>]");
+#ifdef LOUDNESS_LEVELING_SUPPORT
+  printf("\n[-loudness_leveling:<loudness_leveling_flag>]");
+#endif
   printf("\n\nwhere, \n  <input_file> is the input AAC-LC/HE-AACv1/HE-AACv2//AAC-LD/AAC-ELD/AAC-ELDv2/USAC file name");
   printf("\n  <meta_data_file> is a text file which contains metadata.");
   printf("\n   To be given when -mp4:1 is enabled");
@@ -2252,8 +2326,8 @@ void print_usage() {
   printf("\n    interleaved to stereo output. Default 1 ");
   printf("\n  <down_sample_sbr> is to enable/disable down-sampled SBR ");
   printf("\n    output. Default auto identification from header");
-  printf("\n  <drc_cut_factor> is to set DRC cut factor value. Default value is 0");
-  printf("\n  <drc_boost_factor> is to set DRC boost factor. Default value is 0");
+  printf("\n  <drc_cut_factor> is to set DRC cut factor value. Default value is 1");
+  printf("\n  <drc_boost_factor> is to set DRC boost factor. Default value is 1");
   printf("\n  <drc_target_level> is to set DRC target reference level.");
   printf("\n    Default value is 108");
   printf("\n  <drc_heavy_compression> is to enable / disable DRC heavy compression.");
@@ -2294,6 +2368,10 @@ void print_usage() {
   printf("\n  <error_concealment_flag> is to enable / disable error concealment.");
   printf("\n    Default value is 0");
   printf("\n  <esbr_flag> is to enable / disable eSBR. Default value is 1\n\n");
+#ifdef LOUDNESS_LEVELING_SUPPORT
+  printf("\n  <loudness_leveling_flag> is to enable / disable loudness leveling.");
+  printf("\n    Default value is 1");
+#endif
 }
 
 /*******************************************************************************/

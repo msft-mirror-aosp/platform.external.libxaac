@@ -1099,6 +1099,86 @@ static IA_ERRORCODE impd_drc_write_drc_instruct_uni_drc(
   return err_code;
 }
 
+#ifdef LOUDNESS_LEVELING_SUPPORT
+static UWORD32 get_num_ducking_only_drc_sets(
+    ia_drc_instructions_uni_drc const *pstr_drc_instructions_uni_drc,
+    UWORD32 drc_intructions_uni_drc_count) {
+  UWORD32 num_ducking_only_drc_sets = 0;
+  for (UWORD16 i = 0; i < drc_intructions_uni_drc_count; i++) {
+    if (pstr_drc_instructions_uni_drc[i].ducking_only_set_present) {
+      num_ducking_only_drc_sets++;
+    }
+  }
+
+  return num_ducking_only_drc_sets;
+}
+
+static WORD32 write_loudness_leveling_extension(ia_bit_buf_struct *it_bit_buf,
+                                                ia_drc_uni_drc_config_struct *pstr_uni_drc_config,
+                                                ia_drc_gain_enc_struct *pstr_gain_enc,
+                                                VOID *ptr_scratch, WORD32 *bit_cnt) {
+  IA_ERRORCODE err_code = IA_NO_ERROR;
+  WORD32 bit_cnt_local = 0;
+  WORD32 drc_instructions_uni_drc_count_v1 =
+      pstr_uni_drc_config->str_uni_drc_config_ext.drc_instructions_uni_drc_v1_count;
+  WORD32 drc_instructions_uni_drc_count = pstr_uni_drc_config->drc_instructions_uni_drc_count;
+  WORD32 version = 0;
+  // V0 instructions
+  for (WORD16 i = 0; i < drc_instructions_uni_drc_count; i++) {
+    ia_drc_instructions_uni_drc *pstr_drc_instruction =
+        &pstr_uni_drc_config->str_drc_instructions_uni_drc[i];
+    if (pstr_drc_instruction->drc_set_effect & EFFECT_BIT_DUCK_SELF) {
+      if (i > 0 && pstr_uni_drc_config->str_drc_instructions_uni_drc[i - 1].leveling_present &&
+          pstr_uni_drc_config->str_drc_instructions_uni_drc[i - 1].ducking_only_set_present) {
+        err_code = impd_drc_write_drc_instruct_uni_drc(it_bit_buf, version, pstr_uni_drc_config,
+                                                       pstr_gain_enc, pstr_drc_instruction,
+                                                       ptr_scratch, &bit_cnt_local);
+        if (err_code & IA_FATAL_ERROR) {
+          return (err_code);
+        }
+      } else {
+        bit_cnt_local +=
+            iusace_write_bits_buf(it_bit_buf, pstr_drc_instruction->leveling_present, 1);
+        if (pstr_drc_instruction->leveling_present) {
+          bit_cnt_local += iusace_write_bits_buf(
+              it_bit_buf, pstr_drc_instruction->ducking_only_set_present, 1);
+        }
+      }
+    }
+  }
+
+  // V1 instructions
+  version = 1;
+  for (WORD16 i = 0; i < drc_instructions_uni_drc_count_v1; i++) {
+    ia_drc_instructions_uni_drc *pstr_drc_instruction =
+        &pstr_uni_drc_config->str_uni_drc_config_ext.str_drc_instructions_uni_drc_v1[i];
+    if (pstr_drc_instruction->drc_set_effect & EFFECT_BIT_DUCK_SELF) {
+      if (i > 0 &&
+          pstr_uni_drc_config->str_uni_drc_config_ext.str_drc_instructions_uni_drc_v1[i - 1]
+              .leveling_present &&
+          pstr_uni_drc_config->str_uni_drc_config_ext.str_drc_instructions_uni_drc_v1[i - 1]
+              .ducking_only_set_present) {
+        err_code = impd_drc_write_drc_instruct_uni_drc(it_bit_buf, version, pstr_uni_drc_config,
+                                                       pstr_gain_enc, pstr_drc_instruction,
+                                                       ptr_scratch, &bit_cnt_local);
+        if (err_code & IA_FATAL_ERROR) {
+          return (err_code);
+        }
+      } else {
+        bit_cnt_local +=
+            iusace_write_bits_buf(it_bit_buf, pstr_drc_instruction->leveling_present, 1);
+        if (pstr_drc_instruction->leveling_present) {
+          bit_cnt_local += iusace_write_bits_buf(
+              it_bit_buf, pstr_drc_instruction->ducking_only_set_present, 1);
+        }
+      }
+    }
+  }
+  *bit_cnt += bit_cnt_local;
+  return IA_NO_ERROR;
+}
+#endif
+
 static VOID impd_drc_write_gain_params(ia_bit_buf_struct *it_bit_buf, const WORD32 version,
                                        const WORD32 band_count, const WORD32 drc_band_type,
                                        ia_drc_gain_params_struct *pstr_gain_params,
@@ -2536,6 +2616,9 @@ static IA_ERRORCODE impd_drc_write_uni_drc_config_extn(
          pstr_uni_drc_config_ext->uni_drc_config_ext_type[counter] != UNIDRC_CONF_EXT_TERM) {
     switch (pstr_uni_drc_config_ext->uni_drc_config_ext_type[counter]) {
       case UNIDRC_CONF_EXT_PARAM_DRC: {
+#ifdef LOUDNESS_LEVELING_SUPPORT
+        bit_cnt_local_ext = 0;
+#endif  // LOUDNESS_LEVELING_SUPPORT
         err_code = impd_drc_write_drc_coeff_parametric_drc(
             ptr_bit_buf_ext, pstr_uni_drc_config,
             &(pstr_uni_drc_config_ext->str_drc_coeff_parametric_drc), &bit_cnt_local_ext);
@@ -2559,6 +2642,9 @@ static IA_ERRORCODE impd_drc_write_uni_drc_config_extn(
       } break;
       case UNIDRC_CONF_EXT_V1: {
         version = 1;
+#ifdef LOUDNESS_LEVELING_SUPPORT
+        bit_cnt_local_ext = 0;
+#endif  // LOUDNESS_LEVELING_SUPPORT
         bit_cnt_local_ext += iusace_write_bits_buf(
             ptr_bit_buf_ext, pstr_uni_drc_config_ext->downmix_instructions_v1_present, 1);
         if (pstr_uni_drc_config_ext->downmix_instructions_v1_present == 1) {
@@ -2583,10 +2669,27 @@ static IA_ERRORCODE impd_drc_write_uni_drc_config_extn(
                 &(pstr_uni_drc_config_ext->str_drc_coefficients_uni_drc_v1[idx]),
                 &bit_cnt_local_ext);
           }
+#ifdef LOUDNESS_LEVELING_SUPPORT
+          UWORD32 num_ducking_only_drc_sets = get_num_ducking_only_drc_sets(
+              pstr_uni_drc_config_ext->str_drc_instructions_uni_drc_v1,
+              pstr_uni_drc_config_ext->drc_instructions_uni_drc_v1_count);
 
+          bit_cnt_local_ext +=
+              iusace_write_bits_buf(ptr_bit_buf_ext,
+                                    pstr_uni_drc_config_ext->drc_instructions_uni_drc_v1_count -
+                                        num_ducking_only_drc_sets,
+                                    6);
+#else
           bit_cnt_local_ext += iusace_write_bits_buf(
               ptr_bit_buf_ext, pstr_uni_drc_config_ext->drc_instructions_uni_drc_v1_count, 6);
+#endif
           for (idx = 0; idx < pstr_uni_drc_config_ext->drc_instructions_uni_drc_v1_count; idx++) {
+#ifdef LOUDNESS_LEVELING_SUPPORT
+            if (idx > 0 && pstr_uni_drc_config_ext->str_drc_instructions_uni_drc_v1[idx - 1]
+                               .ducking_only_set_present) {
+              continue;
+            }
+#endif
             err_code = impd_drc_write_drc_instruct_uni_drc(
                 ptr_bit_buf_ext, version, pstr_uni_drc_config, pstr_gain_enc,
                 &(pstr_uni_drc_config_ext->str_drc_instructions_uni_drc_v1[idx]), ptr_scratch,
@@ -2632,6 +2735,17 @@ static IA_ERRORCODE impd_drc_write_uni_drc_config_extn(
           }
         }
       } break;
+
+#ifdef LOUDNESS_LEVELING_SUPPORT
+      case UNIDRCCONFEXT_LEVELING: {
+        bit_cnt_local_ext = 0;
+        err_code = write_loudness_leveling_extension(
+            ptr_bit_buf_ext, pstr_uni_drc_config, pstr_gain_enc, ptr_scratch, &bit_cnt_local_ext);
+        if (err_code & IA_FATAL_ERROR) {
+          return (err_code);
+        }
+      } break;
+#endif
       default:
         break;
     }
@@ -2639,6 +2753,9 @@ static IA_ERRORCODE impd_drc_write_uni_drc_config_extn(
     pstr_uni_drc_config_ext->ext_bit_size[counter] = bit_cnt_local_ext;
     bit_size = pstr_uni_drc_config_ext->ext_bit_size[counter] - 1;
     ext_size_bits = (WORD32)(log((FLOAT32)bit_size) / log(2.f)) + 1;
+#ifdef LOUDNESS_LEVELING_SUPPORT
+    ext_size_bits = (ext_size_bits < 4) ? 4 : ext_size_bits;
+#endif  // LOUDNESS_LEVELING_SUPPORT
     bit_size_len = ext_size_bits - 4;
 
     bit_cnt_local += iusace_write_bits_buf(it_bit_buf, bit_size_len, 4);
@@ -2693,10 +2810,26 @@ static IA_ERRORCODE impd_drc_write_uni_drc_config_extn(
                 it_bit_buf, version,
                 &(pstr_uni_drc_config_ext->str_drc_coefficients_uni_drc_v1[idx]), &bit_cnt_local);
           }
-
+#ifdef LOUDNESS_LEVELING_SUPPORT
+          UWORD32 num_ducking_only_drc_sets = get_num_ducking_only_drc_sets(
+              pstr_uni_drc_config_ext->str_drc_instructions_uni_drc_v1,
+              pstr_uni_drc_config_ext->drc_instructions_uni_drc_v1_count);
+          bit_cnt_local +=
+              iusace_write_bits_buf(it_bit_buf,
+                                    pstr_uni_drc_config_ext->drc_instructions_uni_drc_v1_count -
+                                        num_ducking_only_drc_sets,
+                                    6);
+#else
           bit_cnt_local += iusace_write_bits_buf(
               it_bit_buf, pstr_uni_drc_config_ext->drc_instructions_uni_drc_v1_count, 6);
+#endif
           for (idx = 0; idx < pstr_uni_drc_config_ext->drc_instructions_uni_drc_v1_count; idx++) {
+#ifdef LOUDNESS_LEVELING_SUPPORT
+            if (idx > 0 && pstr_uni_drc_config_ext->str_drc_instructions_uni_drc_v1[idx - 1]
+                               .ducking_only_set_present) {
+              continue;
+            }
+#endif
             err_code = impd_drc_write_drc_instruct_uni_drc(
                 it_bit_buf, version, pstr_uni_drc_config, pstr_gain_enc,
                 &(pstr_uni_drc_config_ext->str_drc_instructions_uni_drc_v1[idx]), ptr_scratch,
@@ -2741,6 +2874,15 @@ static IA_ERRORCODE impd_drc_write_uni_drc_config_extn(
           }
         }
       } break;
+#ifdef LOUDNESS_LEVELING_SUPPORT
+      case UNIDRCCONFEXT_LEVELING: {
+        err_code = write_loudness_leveling_extension(it_bit_buf, pstr_uni_drc_config,
+                                                     pstr_gain_enc, ptr_scratch, &bit_cnt_local);
+        if (err_code & IA_FATAL_ERROR) {
+          return (err_code);
+        }
+      } break;
+#endif
       default:
         for (idx = 0; idx < pstr_uni_drc_config_ext->ext_bit_size[counter]; idx++) {
           bit_cnt_local += iusace_write_bits_buf(it_bit_buf, 0, 1);
@@ -2849,10 +2991,10 @@ IA_ERRORCODE impd_drc_write_loudness_info_set_extension(
         }
         break;
     }
+    counter++;
+
     bit_cnt_local += iusace_write_bits_buf(
         it_bit_buf, pstr_loudness_info_set_extension->loudness_info_set_ext_type[counter], 4);
-
-    counter++;
   }
 
   *ptr_bit_cnt += bit_cnt_local;
@@ -2948,9 +3090,17 @@ IA_ERRORCODE impd_drc_write_uni_drc_config(ia_drc_enc_state *pstr_drc_state, WOR
   bit_cnt_local +=
       iusace_write_bits_buf(it_bit_buf, pstr_uni_drc_config->drc_coefficients_uni_drc_count, 3);
 
+#ifdef LOUDNESS_LEVELING_SUPPORT
+  UWORD32 num_ducking_only_drc_sets =
+      get_num_ducking_only_drc_sets(pstr_uni_drc_config->str_drc_instructions_uni_drc,
+                                    pstr_uni_drc_config->drc_instructions_uni_drc_count);
+  bit_cnt_local += iusace_write_bits_buf(
+      it_bit_buf, pstr_uni_drc_config->drc_instructions_uni_drc_count - num_ducking_only_drc_sets,
+      6);
+#else
   bit_cnt_local +=
       iusace_write_bits_buf(it_bit_buf, pstr_uni_drc_config->drc_instructions_uni_drc_count, 6);
-
+#endif
   bit_cnt_local +=
       iusace_write_bits_buf(it_bit_buf, pstr_uni_drc_config->str_channel_layout.base_ch_count, 7);
   bit_cnt_local += iusace_write_bits_buf(
@@ -2985,6 +3135,12 @@ IA_ERRORCODE impd_drc_write_uni_drc_config(ia_drc_enc_state *pstr_drc_state, WOR
   }
 
   for (idx = 0; idx < pstr_uni_drc_config->drc_instructions_uni_drc_count; idx++) {
+#ifdef LOUDNESS_LEVELING_SUPPORT
+    if (idx > 0 &&
+        pstr_uni_drc_config->str_drc_instructions_uni_drc[idx - 1].ducking_only_set_present) {
+      continue;
+    }
+#endif
     err_code = impd_drc_write_drc_instruct_uni_drc(
         it_bit_buf, version, pstr_uni_drc_config, pstr_gain_enc,
         &(pstr_uni_drc_config->str_drc_instructions_uni_drc[idx]), ptr_scratch, &bit_cnt_local);
@@ -3019,7 +3175,7 @@ IA_ERRORCODE impd_drc_write_measured_loudness_info(ia_drc_enc_state *pstr_drc_st
     return (err_code);
   }
   pstr_drc_state->drc_config_ext_data_size_bit = bit_cnt_lis;
- 
+
   return err_code;
 }
 
