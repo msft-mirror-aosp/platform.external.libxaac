@@ -75,7 +75,7 @@ IA_ERRORCODE ia_drc_dec_api(pVOID p_ia_drc_dec_obj, WORD32 i_cmd, WORD32 i_idx,
   pWORD8 pb_value = pv_value;
   SIZE_T *ps_value = pv_value;
   pWORD32 pi_value = pv_value;
-  float *pf_value = pv_value;
+  FLOAT32 *pf_value = pv_value;
 
   switch (i_cmd) {
     case IA_API_CMD_GET_MEM_INFO_SIZE:
@@ -246,7 +246,7 @@ IA_ERRORCODE ia_drc_dec_api(pVOID p_ia_drc_dec_obj, WORD32 i_cmd, WORD32 i_idx,
     case IA_API_CMD_SET_CONFIG_PARAM: {
       switch (i_idx) {
         case IA_DRC_DEC_CONFIG_PARAM_SAMP_FREQ: {
-          if (*pus_value < 8000 || *pus_value > 96000) {
+          if (*pus_value == 0 || *pus_value > 96000) {
             return IA_DRC_DEC_CONFIG_NON_FATAL_INVALID_SAMP_FREQ;
           }
           p_obj_drc->str_config.sampling_rate = *pus_value;
@@ -319,15 +319,21 @@ IA_ERRORCODE ia_drc_dec_api(pVOID p_ia_drc_dec_obj, WORD32 i_cmd, WORD32 i_idx,
           break;
         }
         case IA_DRC_DEC_CONFIG_DRC_BOOST: {
-          p_obj_drc->str_config.boost = (*pf_value);
+          p_obj_drc->str_config.boost = *pf_value;
           p_obj_drc->str_config.boost_set = 1;
           break;
         }
         case IA_DRC_DEC_CONFIG_DRC_COMPRESS: {
-          p_obj_drc->str_config.compress = (*pf_value);
+          p_obj_drc->str_config.compress = *pf_value;
           p_obj_drc->str_config.compress_set = 1;
           break;
         }
+#ifdef LOUDNESS_LEVELING_SUPPORT
+        case IA_DRC_DEC_CONFIG_DRC_LOUDNESS_LEVELING: {
+          p_obj_drc->str_config.loudness_leveling_flag = *pus_value;
+          break;
+        }
+#endif
         default: { return -1; }
       }
       break;

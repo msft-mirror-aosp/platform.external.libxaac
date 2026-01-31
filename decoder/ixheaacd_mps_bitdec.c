@@ -26,6 +26,8 @@
 #include "ixheaacd_mps_aac_struct.h"
 #include "ixheaacd_mps_res_channel.h"
 #include "ixheaac_constants.h"
+#include "ixheaac_basic_ops32.h"
+#include "ixheaac_basic_ops40.h"
 #include "ixheaacd_cnst.h"
 #include "ixheaacd_common_rom.h"
 #include "ixheaacd_sbrdecsettings.h"
@@ -1390,23 +1392,23 @@ static IA_ERRORCODE ixheaacd_factor_funct(WORD32 ott_vs_tot_db, WORD32 quant_mod
   WORD32 constfact;
 
   if (ott_vs_tot_db > 0) return IA_XHEAAC_MPS_DEC_EXE_FATAL_INVALID_MPS_PARAM;
-  db_diff = -ott_vs_tot_db;
+  db_diff = ixheaac_negate32_sat(ott_vs_tot_db);
 
   switch (quant_mode) {
     case QUANT_MODE_0:
-      return (ONE_IN_Q25);
+      return (ONE_IN_Q24);
       break;
     case QUANT_MODE_1:
       x_linear = 1024;
 
-      maxfactor = 167772160;
-      constfact = 6554;
+      maxfactor = 83886080;
+      constfact = 3277;
       break;
     case QUANT_MODE_2:
       x_linear = 1024;
 
-      maxfactor = ONE_IN_Q28;
-      constfact = 9557;
+      maxfactor = (ONE_IN_Q27);
+      constfact = 4779;
       break;
     default:
       return IA_XHEAAC_MPS_DEC_EXE_FATAL_INVALID_QUANT_MODE;
@@ -1414,9 +1416,11 @@ static IA_ERRORCODE ixheaacd_factor_funct(WORD32 ott_vs_tot_db, WORD32 quant_mod
 
   if (db_diff > (x_linear << 5)) {
     WORD32 db_diff_fix = db_diff >> 5;
-    *factor = (db_diff_fix - (WORD32)x_linear) * constfact + ONE_IN_Q25;
+    *factor = ixheaac_add32_sat(
+        ixheaac_sat64_32(ixheaac_mult64(ixheaac_sub32_sat(db_diff_fix, x_linear), constfact)),
+        ONE_IN_Q24);
   } else {
-    *factor = ONE_IN_Q25;
+    *factor = ONE_IN_Q24;
   }
 
   *factor = min(maxfactor, *factor);
@@ -1433,8 +1437,8 @@ static VOID ixheaacd_factor_cld(WORD32 *idx, WORD32 ott_vs_tot_db, WORD32 *ott_v
 
   ixheaacd_factor_funct(ott_vs_tot_db, quant_mode, &factor);
 
-  cld_idx = (((*idx * factor) + THIRTYONE_BY_TWO_IN_Q25) >> 25);
-  cld_idx -= 15;
+  cld_idx = ixheaac_mul32_sh(*idx, factor, 23);
+  cld_idx = ixheaac_shr32(ixheaac_add32(cld_idx, 1), 1);
 
   cld_idx = min(cld_idx, 15);
   cld_idx = max(cld_idx, -15);
@@ -1473,6 +1477,7 @@ static IA_ERRORCODE ixheaacd_map_index_data(
   WORD32 i1, i2, x1, xi, x2;
   WORD32 *db_in;
   WORD32 *db_1, *db_2;
+  IA_ERRORCODE error_code = IA_NO_ERROR;
   db_in = ott_vs_tot_db_in;
   db_1 = ott_vs_tot_db_1;
   db_2 = ott_vs_tot_db_2;
@@ -1554,13 +1559,21 @@ static IA_ERRORCODE ixheaacd_map_index_data(
     if (a_interpolate[i] != 1) {
       if (ll_data->no_cmp_quant_coarse_xxx[param_idx][i] == 1) {
         for (band = start_band; band < stop_band; band++) {
-          ixheaacd_deq_coarse(output_idx_data[xtt_idx][i][band], param_type,
-                              &(output_data[xtt_idx][i][band]), ixheaacd_mps_dec_bitdec_tables);
+          error_code = ixheaacd_deq_coarse(output_idx_data[xtt_idx][i][band], param_type,
+                                           &(output_data[xtt_idx][i][band]),
+                                           ixheaacd_mps_dec_bitdec_tables);
+          if (error_code) {
+            return error_code;
+          }
         }
       } else {
         for (band = start_band; band < stop_band; band++) {
-          ia_mps_dec_deq(output_idx_data[xtt_idx][i][band], param_type,
-                         &(output_data[xtt_idx][i][band]), ixheaacd_mps_dec_bitdec_tables);
+          error_code =
+              ia_mps_dec_deq(output_idx_data[xtt_idx][i][band], param_type,
+                             &(output_data[xtt_idx][i][band]), ixheaacd_mps_dec_bitdec_tables);
+          if (error_code) {
+            return error_code;
+          }
         }
       }
     }

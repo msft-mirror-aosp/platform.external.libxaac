@@ -544,6 +544,7 @@ static VOID ixheaace_set_default_config(ixheaace_api_struct *pstr_api_struct,
     pstr_usac_config->num_preroll_frames = CC_NUM_PREROLL_FRAMES;
     pstr_usac_config->stream_id = USAC_DEFAULT_STREAM_ID_VALUE;
     pstr_usac_config->use_delay_adjustment = USAC_DEFAULT_DELAY_ADJUSTMENT_VALUE;
+    pstr_usac_config->is_loudness_configured = USAC_DEFAULT_MEASURED_LOUDNESS_FLAG_VALUE;
   }
   /* Initialize table pointers */
   ia_enhaacplus_enc_init_aac_tabs(&(pstr_api_struct->pstr_aac_tabs));
@@ -560,7 +561,14 @@ static IA_ERRORCODE ixheaace_validate_config_params(ixheaace_input_config *pstr_
     pstr_input_config->aot = AOT_AAC_LC;
   }
   pstr_input_config->i_native_samp_freq = pstr_input_config->i_samp_freq;
-  pstr_input_config->i_samp_freq = iusace_map_sample_rate(pstr_input_config->i_samp_freq);
+  if (pstr_input_config->aot != AOT_USAC) {
+    pstr_input_config->i_samp_freq = iusace_map_sample_rate(pstr_input_config->i_samp_freq);
+  } else {
+    err_code = iusace_validate_baseline_profile_sample_rate(pstr_input_config->i_samp_freq);
+    if (err_code) {
+      return err_code;
+    }
+  }
 
   if ((pstr_input_config->i_channels < MIN_NUM_CORE_CODER_CHANNELS) ||
       (pstr_input_config->i_channels > MAX_NUM_CORE_CODER_CHANNELS)) {
@@ -1031,37 +1039,57 @@ static IA_ERRORCODE ixheaace_set_config_params(ixheaace_api_struct *pstr_api_str
       pstr_drc_cfg->str_enc_params.sample_rate = pstr_input_config->i_samp_freq;
       pstr_drc_cfg->str_enc_params.domain = TIME_DOMAIN;
       pstr_drc_cfg->str_uni_drc_config.sample_rate = pstr_drc_cfg->str_enc_params.sample_rate;
-      for (WORD32 i = 0; i < pstr_drc_cfg->str_uni_drc_config.drc_coefficients_uni_drc_count;
-           i++) {
-        for (WORD32 j = 0;
-             j < pstr_drc_cfg->str_uni_drc_config.str_drc_coefficients_uni_drc[i].gain_set_count;
-             j++) {
-          pstr_drc_cfg->str_uni_drc_config.str_drc_coefficients_uni_drc[i]
-              .str_gain_set_params[j]
-              .delta_tmin =
-              impd_drc_get_delta_t_min(pstr_drc_cfg->str_uni_drc_config.sample_rate);
+      if (pstr_usac_config->use_drc_element) {
+        for (WORD32 i = 0; i < pstr_drc_cfg->str_uni_drc_config.drc_coefficients_uni_drc_count;
+             i++) {
+          for (WORD32 j = 0;
+               j <
+               pstr_drc_cfg->str_uni_drc_config.str_drc_coefficients_uni_drc[i].gain_set_count;
+               j++) {
+            pstr_drc_cfg->str_uni_drc_config.str_drc_coefficients_uni_drc[i]
+                .str_gain_set_params[j]
+                .delta_tmin =
+                impd_drc_get_delta_t_min(pstr_drc_cfg->str_uni_drc_config.sample_rate);
+          }
+        }
+        for (WORD32 i = 0; i < pstr_drc_cfg->str_uni_drc_config.str_uni_drc_config_ext
+                                   .drc_coefficients_uni_drc_v1_count;
+             i++) {
+          for (WORD32 j = 0; j < pstr_drc_cfg->str_uni_drc_config.str_uni_drc_config_ext
+                                     .str_drc_coefficients_uni_drc_v1[i]
+                                     .gain_set_count;
+               j++) {
+            pstr_drc_cfg->str_uni_drc_config.str_uni_drc_config_ext
+                .str_drc_coefficients_uni_drc_v1[i]
+                .str_gain_set_params[j]
+                .delta_tmin =
+                impd_drc_get_delta_t_min(pstr_drc_cfg->str_uni_drc_config.sample_rate);
+          }
         }
       }
-      for (WORD32 i = 0; i < pstr_drc_cfg->str_uni_drc_config.str_uni_drc_config_ext
-        .drc_coefficients_uni_drc_v1_count; i++) {
-        for (WORD32 j = 0;
-          j < pstr_drc_cfg->str_uni_drc_config.str_uni_drc_config_ext
-          .str_drc_coefficients_uni_drc_v1[i].gain_set_count; j++) {
-          pstr_drc_cfg->str_uni_drc_config.str_uni_drc_config_ext
-            .str_drc_coefficients_uni_drc_v1[i]
-            .str_gain_set_params[j]
-            .delta_tmin =
-            impd_drc_get_delta_t_min(pstr_drc_cfg->str_uni_drc_config.sample_rate);
-        }
-      }
-
       pstr_usac_config->str_drc_cfg = *pstr_drc_cfg;
       pstr_usac_config->str_drc_cfg.str_enc_params.frame_size = pstr_usac_config->drc_frame_size;
       pstr_usac_config->str_drc_cfg.str_uni_drc_config.str_drc_coefficients_uni_drc
           ->drc_frame_size = pstr_usac_config->drc_frame_size;
       pstr_input_config->drc_frame_size = pstr_usac_config->drc_frame_size;
+
+      ia_drc_loudness_info_set_struct *pstr_enc_loudness_info_set =
+          &pstr_usac_config->str_drc_cfg.str_enc_loudness_info_set;
+
+      if ((pstr_usac_config->use_drc_element &&
+           ((pstr_enc_loudness_info_set->loudness_info_count != 0) ||
+            (pstr_enc_loudness_info_set->loudness_info_album_count != 0) ||
+            (pstr_enc_loudness_info_set->str_loudness_info_set_extension
+                 .str_loudness_info_set_ext_eq.loudness_info_v1_count != 0) ||
+            (pstr_enc_loudness_info_set->str_loudness_info_set_extension
+                 .str_loudness_info_set_ext_eq.loudness_info_v1_album_count != 0)))) {
+        pstr_usac_config->is_loudness_configured = 1;
+      } else {
+        pstr_usac_config->is_loudness_configured = 0;
+      }
     }
   } else {
+    WORD32 max_bitreservoir_size;
     if ((pstr_input_config->i_channels > MAX_NUM_CORE_CODER_CHANNELS)) {
       return (IA_EXHEAACE_CONFIG_FATAL_NUM_CHANNELS);
     }
@@ -1185,34 +1213,20 @@ static IA_ERRORCODE ixheaace_set_config_params(ixheaace_api_struct *pstr_api_str
       }
     }
 
-    if (pstr_input_config->aot == AOT_AAC_LD || pstr_input_config->aot == AOT_AAC_ELD) {
-      WORD32 max_channel_bits = (pstr_api_struct->config[0].aac_config.flag_framelength_small
-                                     ? MAXIMUM_CHANNEL_BITS_480
-                                     : MAXIMUM_CHANNEL_BITS_512);
-      if ((pstr_input_config->aac_config.bitreservoir_size > max_channel_bits / 8) ||
-          (pstr_input_config->aac_config.bitreservoir_size < -1)) {
-        pstr_input_config->aac_config.bitreservoir_size =
-            BITRESERVOIR_SIZE_CONFIG_PARAM_DEFAULT_VALUE_LD;
-      }
-      pstr_api_struct->config[0].aac_config.bitreservoir_size =
-          pstr_input_config->aac_config.bitreservoir_size;
+    /* Right shift by 10 as 768 is the max bit reservoir calculated for framelength 1024 */
+    max_bitreservoir_size = (BITRESERVOIR_SIZE_CONFIG_PARAM_DEFAULT_VALUE *
+                             pstr_api_struct->config[0].frame_length) >>
+                            10;
+    if ((pstr_input_config->aac_config.bitreservoir_size > max_bitreservoir_size) ||
+        (pstr_input_config->aac_config.bitreservoir_size < -1)) {
+      pstr_input_config->aac_config.bitreservoir_size = max_bitreservoir_size;
     }
-    if (pstr_input_config->aot == AOT_AAC_LC || pstr_input_config->aot == AOT_SBR ||
-        pstr_input_config->aot == AOT_PS) {
-      WORD32 max_channel_bits = (pstr_api_struct->config[0].aac_config.flag_framelength_small
-                                     ? MAXIMUM_CHANNEL_BITS_960
-                                     : MAXIMUM_CHANNEL_BITS_1024);
-
-      if ((pstr_input_config->aac_config.bitreservoir_size > max_channel_bits / 8) ||
-          (pstr_input_config->aac_config.bitreservoir_size < -1)) {
-        pstr_input_config->aac_config.bitreservoir_size =
-            BITRESERVOIR_SIZE_CONFIG_PARAM_DEFAULT_VALUE_LC;
-      }
-      pstr_api_struct->config[0].aac_config.bitreservoir_size =
-          pstr_input_config->aac_config.bitreservoir_size;
-    }
-    pstr_api_struct->config[0].aac_config.full_bandwidth =
+    for (ele_idx = 0; ele_idx < MAXIMUM_BS_ELE; ele_idx++) {
+      pstr_api_struct->config[ele_idx].aac_config.bitreservoir_size =
+        pstr_input_config->aac_config.bitreservoir_size;
+      pstr_api_struct->config[ele_idx].aac_config.full_bandwidth =
         pstr_input_config->aac_config.full_bandwidth;
+    }
   }
 
   return IA_NO_ERROR;
@@ -3109,16 +3123,6 @@ static IA_ERRORCODE iusace_process(ixheaace_api_struct *pstr_api_struct) {
 
     write_off_set = INPUT_DELAY_LC * IXHEAACE_MAX_CH_IN_BS_ELE;
 
-    if (pstr_config->use_delay_adjustment == 1) {
-      if (pstr_api_struct->config[0].ccfl_idx == SBR_4_1) {
-        write_off_set += SBR_4_1_DELAY_ADJUSTMENT * IXHEAACE_MAX_CH_IN_BS_ELE;
-      } else if (pstr_api_struct->config[0].ccfl_idx == SBR_2_1) {
-        write_off_set += SBR_2_1_DELAY_ADJUSTMENT * IXHEAACE_MAX_CH_IN_BS_ELE;
-      } else {
-        write_off_set += SBR_8_3_DELAY_ADJUSTMENT * IXHEAACE_MAX_CH_IN_BS_ELE;
-      }
-    }
-
     if (pstr_api_struct->config[0].ccfl_idx == SBR_4_1) {
       write_off_set = write_off_set * 2;
     }
@@ -3351,9 +3355,6 @@ static IA_ERRORCODE iusace_process(ixheaace_api_struct *pstr_api_struct) {
       ixheaace_get_input_scratch_buf(pstr_api_struct->pstr_state->ptr_temp_buff_resamp,
                                      &in_buffer_temp);
       if (pstr_api_struct->config[0].ccfl_idx == SBR_8_3) {
-        if (pstr_config->use_delay_adjustment == 1) {
-          delay = SBR_8_3_DELAY_ADJUSTMENT * IXHEAACE_MAX_CH_IN_BS_ELE;
-        }
         WORD32 input_tot = num_samples_read / pstr_api_struct->config[0].i_channels;
         ixheaace_upsampling_inp_buf_generation(ptr_input_buffer, in_buffer_temp, input_tot,
                                                UPSAMPLE_FAC, write_off_set - delay);
@@ -3382,13 +3383,6 @@ static IA_ERRORCODE iusace_process(ixheaace_api_struct *pstr_api_struct) {
               shared_buf1_ring, shared_buf2_ring, pstr_scratch_resampler);
         } else {
           WORD32 out_stride = IXHEAACE_MAX_CH_IN_BS_ELE * resamp_ratio;
-          if (pstr_config->use_delay_adjustment == 1) {
-            if (pstr_api_struct->config[0].ccfl_idx == SBR_2_1) {
-              delay = out_stride * SBR_2_1_DELAY_ADJUSTMENT;
-            } else {
-              delay = out_stride * SBR_4_1_DELAY_ADJUSTMENT;
-            }
-          }
           ia_enhaacplus_enc_iir_downsampler(
               &(pstr_api_struct->pstr_state->down_sampler[0][ch]),
               ptr_input_buffer + write_off_set - delay + ch,
@@ -3514,82 +3508,43 @@ IA_ERRORCODE ixheaace_get_lib_id_strings(pVOID pv_output) {
   return err_code;
 }
 
-static void ixheaace_config_drc_parameters(ixheaace_api_struct *pstr_api_struct,
-                                           ixheaace_input_config *pstr_input_config) {
-  ia_drc_input_config *pstr_drc_cfg;
-  pstr_drc_cfg = (ia_drc_input_config *)pstr_input_config->pv_drc_cfg;
-
-  ia_drc_internal_config *pstr_internal_drc_cfg =
-      &pstr_api_struct->config[0].usac_config.str_internal_drc_cfg;
-
-  ia_drc_loudness_info_set_struct *pstr_enc_loudness_info_set =
-      &pstr_drc_cfg->str_enc_loudness_info_set;
-  ia_drc_loudness_info_set_struct *pstr_enc_internal_loudness_info_set =
-      &pstr_internal_drc_cfg->str_enc_loudness_info_set;
-
-  WORD32 n;
-
-  pstr_enc_loudness_info_set->loudness_info_count =
-      MIN(pstr_enc_internal_loudness_info_set->loudness_info_count, MAX_LOUDNESS_INFO_COUNT);
-
-  for (n = 0; n < pstr_enc_loudness_info_set->loudness_info_count; n++) {
-    memcpy(&pstr_enc_loudness_info_set->str_loudness_info[n],
-           &pstr_enc_internal_loudness_info_set->str_loudness_info[n],
-           sizeof(ia_drc_loudness_info_struct));
-  }
-
-  pstr_enc_loudness_info_set->loudness_info_album_count = MIN(
-      pstr_enc_internal_loudness_info_set->loudness_info_album_count, MAX_LOUDNESS_INFO_COUNT);
-  for (n = 0; n < pstr_enc_loudness_info_set->loudness_info_album_count; n++) {
-    memcpy(&pstr_enc_loudness_info_set->str_loudness_info_album[n],
-           &pstr_enc_internal_loudness_info_set->str_loudness_info_album[n],
-           sizeof(ia_drc_loudness_info_struct));
-  }
-}
-
 static void ixheaace_get_measured_loudness_info(ixheaace_api_struct *pstr_api_struct,
                                                 ixheaace_input_config *pstr_input_config) {
   ia_drc_input_config *pstr_internal_drc_cfg;
-  if (!pstr_input_config->use_measured_loudness) {
-    pstr_internal_drc_cfg =
-        (ia_drc_input_config *)&pstr_api_struct->config[0].usac_config.str_internal_drc_cfg;
-  } else {
-    pstr_internal_drc_cfg = &pstr_api_struct->config[0].usac_config.str_drc_cfg;
-  }
-  memset(pstr_internal_drc_cfg, 0, sizeof(ia_drc_input_config));
-  ia_drc_uni_drc_config_struct *pstr_uni_drc_config = &pstr_internal_drc_cfg->str_uni_drc_config;
-  ia_drc_loudness_info_set_struct *pstr_enc_loudness_info_set =
-      &pstr_internal_drc_cfg->str_enc_loudness_info_set;
-  {
-    WORD32 n, m;
-    pstr_uni_drc_config->sample_rate_present = 1;
-    pstr_uni_drc_config->loudness_info_set_present = 1;
-    pstr_enc_loudness_info_set->loudness_info_count = 1;
-    pstr_enc_loudness_info_set->loudness_info_count =
-        MIN(pstr_enc_loudness_info_set->loudness_info_count, MAX_LOUDNESS_INFO_COUNT);
-    for (n = 0; n < pstr_enc_loudness_info_set->loudness_info_count; n++) {
-      pstr_enc_loudness_info_set->str_loudness_info[n].drc_set_id = 0;
-      pstr_enc_loudness_info_set->str_loudness_info[n].downmix_id = 0;
-      pstr_enc_loudness_info_set->str_loudness_info[n].sample_peak_level_present = 1;
-      pstr_enc_loudness_info_set->str_loudness_info[n].sample_peak_level =
-          pstr_input_config->sample_peak_level;
-      pstr_enc_loudness_info_set->str_loudness_info[n].true_peak_level_present = 0;
-      pstr_enc_loudness_info_set->str_loudness_info[n].measurement_count = 1;
-      pstr_enc_loudness_info_set->str_loudness_info[n].measurement_count =
-          MIN(pstr_enc_loudness_info_set->str_loudness_info[n].measurement_count,
-              MAX_MEASUREMENT_COUNT);
+  ia_drc_uni_drc_config_struct *pstr_uni_drc_config;
+  ia_drc_loudness_info_set_struct *pstr_enc_loudness_info_set;
+  WORD32 n, m;
 
-      for (m = 0; m < pstr_enc_loudness_info_set->str_loudness_info[n].measurement_count; m++) {
-        pstr_enc_loudness_info_set->str_loudness_info[n]
-            .str_loudness_measure[m]
-            .method_definition = pstr_input_config->method_def;
-        pstr_enc_loudness_info_set->str_loudness_info[n].str_loudness_measure[m].method_value =
-            (FLOAT32)pstr_input_config->measured_loudness;
-        pstr_enc_loudness_info_set->str_loudness_info[n]
-            .str_loudness_measure[m]
-            .measurement_system = pstr_input_config->measurement_system;
-        pstr_enc_loudness_info_set->str_loudness_info[n].str_loudness_measure[m].reliability = 3;
-      }
+  pstr_internal_drc_cfg =
+      (ia_drc_input_config *)&pstr_api_struct->config[0].usac_config.str_drc_cfg;
+  if (pstr_input_config->use_drc_element == 0) {
+    memset(pstr_internal_drc_cfg, 0, sizeof(ia_drc_input_config));
+  }
+  pstr_uni_drc_config = &pstr_internal_drc_cfg->str_uni_drc_config;
+  pstr_enc_loudness_info_set = &pstr_internal_drc_cfg->str_enc_loudness_info_set;
+
+  pstr_uni_drc_config->sample_rate_present = 1;
+  pstr_uni_drc_config->loudness_info_set_present = 1;
+  pstr_enc_loudness_info_set->loudness_info_count = 1;
+
+  for (n = 0; n < pstr_enc_loudness_info_set->loudness_info_count; n++) {
+    pstr_enc_loudness_info_set->str_loudness_info[n].drc_set_id = 0;
+    pstr_enc_loudness_info_set->str_loudness_info[n].downmix_id = 0;
+    pstr_enc_loudness_info_set->str_loudness_info[n].sample_peak_level_present = 1;
+    pstr_enc_loudness_info_set->str_loudness_info[n].sample_peak_level =
+        pstr_input_config->sample_peak_level;
+    pstr_enc_loudness_info_set->str_loudness_info[n].true_peak_level_present = 0;
+    pstr_enc_loudness_info_set->str_loudness_info[n].measurement_count = 1;
+
+    for (m = 0; m < pstr_enc_loudness_info_set->str_loudness_info[n].measurement_count; m++) {
+      pstr_enc_loudness_info_set->str_loudness_info[n].str_loudness_measure[m].method_definition =
+          pstr_input_config->method_def;
+      pstr_enc_loudness_info_set->str_loudness_info[n].str_loudness_measure[m].method_value =
+          (FLOAT32)pstr_input_config->measured_loudness;
+      pstr_enc_loudness_info_set->str_loudness_info[n]
+          .str_loudness_measure[m]
+          .measurement_system = pstr_input_config->measurement_system;
+      pstr_enc_loudness_info_set->str_loudness_info[n].str_loudness_measure[m].reliability = 3;
     }
   }
 }
@@ -3629,28 +3584,19 @@ IA_ERRORCODE ixheaace_allocate(pVOID pv_input, pVOID pv_output) {
   pstr_api_struct = (ixheaace_api_struct *)pstr_output_config->pv_ia_process_api_obj;
   memset(pstr_api_struct, 0, sizeof(*pstr_api_struct));
 
-  if (pstr_input_config->aot == AOT_USAC) {
-    if (pstr_input_config->use_drc_element == 0) {
-      pstr_input_config->use_measured_loudness = 1;
-    } else {
-      pstr_input_config->use_measured_loudness = 0;
-    }
-    ixheaace_get_measured_loudness_info(pstr_api_struct, pstr_input_config);
-
-    if (!pstr_input_config->use_measured_loudness)
-      ixheaace_config_drc_parameters(pstr_api_struct, pstr_input_config);
-
-    if (pstr_input_config->use_measured_loudness) {
-      memcpy(pstr_input_config->pv_drc_cfg, &pstr_api_struct->config[0].usac_config.str_drc_cfg,
-             sizeof(ia_drc_input_config));
-    }
-  }
-
   ixheaace_set_default_config(pstr_api_struct, pstr_input_config);
 
   err_code = ixheaace_set_config_params(pstr_api_struct, pstr_input_config);
   if (err_code) {
     return err_code;
+  }
+
+  if (pstr_input_config->aot == AOT_USAC) {
+    if (pstr_api_struct->config[0].usac_config.is_loudness_configured == 0) {
+      ixheaace_get_measured_loudness_info(pstr_api_struct, pstr_input_config);
+      memcpy(pstr_input_config->pv_drc_cfg, &pstr_api_struct->config[0].usac_config.str_drc_cfg,
+             sizeof(ia_drc_input_config));
+    }
   }
 
   pstr_output_config->ui_proc_mem_tabs_size =
@@ -3681,12 +3627,6 @@ IA_ERRORCODE ixheaace_allocate(pVOID pv_input, pVOID pv_output) {
 
   pstr_output_config->malloc_count++;
 
-  if (pstr_input_config->aot == AOT_USAC) {
-    if (pstr_input_config->use_measured_loudness) {
-      pstr_api_struct->config[0].usac_config.use_measured_loudness = 1;
-    }
-  }
-
   ixheaace_fill_mem_tabs(pstr_api_struct, pstr_input_config->aot);
 
   err_code =
@@ -3694,6 +3634,10 @@ IA_ERRORCODE ixheaace_allocate(pVOID pv_input, pVOID pv_output) {
   if (err_code) {
     return err_code;
   }
+
+  pstr_output_config->is_loudness_configured =
+      pstr_api_struct->config[0].usac_config.is_loudness_configured;
+
   return err_code;
 }
 

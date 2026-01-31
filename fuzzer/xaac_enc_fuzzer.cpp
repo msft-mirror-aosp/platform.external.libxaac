@@ -56,7 +56,10 @@ static VOID ixheaace_read_drc_config_params(
     WORD32 in_ch) {
   WORD32 n, g, s, m, ch, p;
   WORD32 gain_set_channels;
-
+#ifdef LOUDNESS_LEVELING_SUPPORT
+  UWORD32 loudness_leveling_extension_present = 0;
+  UWORD32 config_extension_count = 0;
+#endif
   pstr_enc_params->gain_sequence_present = fuzzed_data->ConsumeBool();
   pstr_enc_params->delay_mode = fuzzed_data->ConsumeBool();
   pstr_uni_drc_config->sample_rate_present = fuzzed_data->ConsumeBool();
@@ -121,6 +124,13 @@ static VOID ixheaace_read_drc_config_params(
     pstr_drc_instructions_uni_drc->drc_instructions_type = fuzzed_data->ConsumeIntegral<WORD8>();
     pstr_drc_instructions_uni_drc->mae_group_id = fuzzed_data->ConsumeIntegral<WORD8>();
     pstr_drc_instructions_uni_drc->mae_group_preset_id = fuzzed_data->ConsumeIntegral<WORD8>();
+#ifdef LOUDNESS_LEVELING_SUPPORT
+    if (pstr_drc_instructions_uni_drc->drc_set_effect & EFFECT_BIT_DUCK_SELF) {
+      pstr_drc_instructions_uni_drc->leveling_present = fuzzed_data->ConsumeBool();
+      pstr_drc_instructions_uni_drc->ducking_only_set_present = fuzzed_data->ConsumeBool();
+      loudness_leveling_extension_present = 1;
+    }
+#endif
   }
 
   pstr_uni_drc_config->drc_coefficients_uni_drc_count =
@@ -304,11 +314,17 @@ static VOID ixheaace_read_drc_config_params(
   pstr_enc_loudness_info_set->loudness_info_set_ext_present = fuzzed_data->ConsumeBool();
   pstr_enc_gain_extension->uni_drc_gain_ext_present = fuzzed_data->ConsumeBool();
 
-  if (pstr_uni_drc_config->uni_drc_config_ext_present) {
+  if (pstr_uni_drc_config->uni_drc_config_ext_present == 1) {
+#ifdef LOUDNESS_LEVELING_SUPPORT
+    pstr_uni_drc_config->str_uni_drc_config_ext.uni_drc_config_ext_type[config_extension_count] =
+        UNIDRC_CONF_EXT_V1;
+    config_extension_count++;
+#else
     pstr_uni_drc_config->str_uni_drc_config_ext.uni_drc_config_ext_type[0] = UNIDRC_CONF_EXT_V1;
+#endif
     pstr_uni_drc_config->str_uni_drc_config_ext.downmix_instructions_v1_present =
         fuzzed_data->ConsumeBool();
-    if (pstr_uni_drc_config->str_uni_drc_config_ext.downmix_instructions_v1_present) {
+    if (pstr_uni_drc_config->str_uni_drc_config_ext.downmix_instructions_v1_present == 1) {
       /***********  str_downmix_instructions_v1  *************/
 
       pstr_uni_drc_config->str_uni_drc_config_ext.downmix_instructions_v1_count =
@@ -337,7 +353,7 @@ static VOID ixheaace_read_drc_config_params(
     pstr_uni_drc_config->str_uni_drc_config_ext.drc_coeffs_and_instructions_uni_drc_v1_present =
         fuzzed_data->ConsumeBool();
     if (pstr_uni_drc_config->str_uni_drc_config_ext
-            .drc_coeffs_and_instructions_uni_drc_v1_present) {
+            .drc_coeffs_and_instructions_uni_drc_v1_present == 1) {
       /***********  str_drc_coefficients_uni_drc_v1  *************/
 
       pstr_uni_drc_config->str_uni_drc_config_ext.drc_coefficients_uni_drc_v1_count =
@@ -496,6 +512,118 @@ static VOID ixheaace_read_drc_config_params(
         pstr_drc_instructions_uni_drc->mae_group_id = fuzzed_data->ConsumeIntegral<WORD8>();
         pstr_drc_instructions_uni_drc->mae_group_preset_id =
             fuzzed_data->ConsumeIntegral<WORD8>();
+#ifdef LOUDNESS_LEVELING_SUPPORT
+
+        if (pstr_drc_instructions_uni_drc->drc_set_effect & EFFECT_BIT_DUCK_SELF) {
+          pstr_drc_instructions_uni_drc->leveling_present = fuzzed_data->ConsumeBool();
+          pstr_drc_instructions_uni_drc->ducking_only_set_present = fuzzed_data->ConsumeBool();
+          loudness_leveling_extension_present = 1;
+        }
+#endif
+      }
+    }
+#ifdef LOUDNESS_LEVELING_SUPPORT
+    if (loudness_leveling_extension_present) {
+      pstr_uni_drc_config->str_uni_drc_config_ext
+          .uni_drc_config_ext_type[config_extension_count] = UNIDRCCONFEXT_LEVELING;
+      config_extension_count++;
+    }
+#endif
+  }
+
+  if (pstr_enc_loudness_info_set->loudness_info_set_ext_present == 1) {
+    ia_drc_loudness_info_set_ext_eq_struct *pstr_loudness_info_set_ext_eq =
+        &pstr_enc_loudness_info_set->str_loudness_info_set_extension.str_loudness_info_set_ext_eq;
+
+    pstr_enc_loudness_info_set->str_loudness_info_set_extension.loudness_info_set_ext_type[0] =
+        UNIDRC_LOUD_EXT_EQ;
+
+    /*********************   loudness_info_v1_album   *********************/
+    pstr_loudness_info_set_ext_eq->loudness_info_v1_album_count =
+        fuzzed_data->ConsumeIntegralInRange<WORD8>(0, MAX_LOUDNESS_INFO_COUNT);
+    for (n = 0; n < pstr_loudness_info_set_ext_eq->loudness_info_v1_album_count; n++) {
+      pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n].drc_set_id =
+          fuzzed_data->ConsumeIntegral<WORD8>();
+      pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n].downmix_id =
+          fuzzed_data->ConsumeIntegral<WORD8>();
+      pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n].sample_peak_level_present =
+          fuzzed_data->ConsumeBool();
+      if (pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n]
+              .sample_peak_level_present == 1) {
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n].sample_peak_level =
+            fuzzed_data->ConsumeFloatingPoint<FLOAT32>();
+      }
+      pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n].true_peak_level_present =
+          fuzzed_data->ConsumeBool();
+      if (pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n].true_peak_level_present ==
+          1) {
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n].true_peak_level =
+            fuzzed_data->ConsumeFloatingPoint<FLOAT32>();
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n]
+            .true_peak_level_measurement_system = fuzzed_data->ConsumeIntegral<WORD8>();
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n].true_peak_level_reliability =
+            fuzzed_data->ConsumeIntegral<WORD8>();
+      }
+      pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n].measurement_count =
+          fuzzed_data->ConsumeIntegralInRange<WORD8>(0, MAX_MEASUREMENT_COUNT);
+      for (m = 0;
+           m < pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n].measurement_count;
+           m++) {
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n]
+            .str_loudness_measure[m]
+            .method_definition = fuzzed_data->ConsumeIntegral<WORD8>();
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n]
+            .str_loudness_measure[m]
+            .method_value = fuzzed_data->ConsumeFloatingPoint<FLOAT32>();
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n]
+            .str_loudness_measure[m]
+            .measurement_system = fuzzed_data->ConsumeIntegral<WORD8>();
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1_album[n]
+            .str_loudness_measure[m]
+            .reliability = fuzzed_data->ConsumeIntegral<WORD8>();
+      }
+    }
+
+    /*********************   loudness_info_v1   *********************/
+    pstr_loudness_info_set_ext_eq->loudness_info_v1_count =
+        fuzzed_data->ConsumeIntegralInRange<WORD8>(0, MAX_LOUDNESS_INFO_COUNT);
+    for (n = 0; n < pstr_loudness_info_set_ext_eq->loudness_info_v1_count; n++) {
+      pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n].drc_set_id =
+          fuzzed_data->ConsumeIntegral<WORD8>();
+      pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n].downmix_id =
+          fuzzed_data->ConsumeIntegral<WORD8>();
+      pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n].sample_peak_level_present =
+          fuzzed_data->ConsumeBool();
+      if (pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n].sample_peak_level_present == 1) {
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n].sample_peak_level =
+            fuzzed_data->ConsumeFloatingPoint<FLOAT32>();
+      }
+      pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n].true_peak_level_present =
+          fuzzed_data->ConsumeBool();
+      if (pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n].true_peak_level_present == 1) {
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n].true_peak_level =
+            fuzzed_data->ConsumeFloatingPoint<FLOAT32>();
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n]
+            .true_peak_level_measurement_system = fuzzed_data->ConsumeIntegral<WORD8>();
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n].true_peak_level_reliability =
+            fuzzed_data->ConsumeIntegral<WORD8>();
+      }
+      pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n].measurement_count =
+          fuzzed_data->ConsumeIntegralInRange<WORD8>(0, MAX_MEASUREMENT_COUNT);
+      for (m = 0; m < pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n].measurement_count;
+           m++) {
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n]
+            .str_loudness_measure[m]
+            .method_definition = fuzzed_data->ConsumeIntegral<WORD8>();
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n]
+            .str_loudness_measure[m]
+            .method_value = fuzzed_data->ConsumeFloatingPoint<FLOAT32>();
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n]
+            .str_loudness_measure[m]
+            .measurement_system = fuzzed_data->ConsumeIntegral<WORD8>();
+        pstr_loudness_info_set_ext_eq->str_loudness_info_v1[n]
+            .str_loudness_measure[m]
+            .reliability = fuzzed_data->ConsumeIntegral<WORD8>();
       }
     }
   }

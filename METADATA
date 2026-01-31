@@ -7,14 +7,14 @@ description: "Android fork of the xaac library."
 third_party {
   license_type: NOTICE
   last_upgrade_date {
-    year: 2025
+    year: 2026
     month: 1
-    day: 29
+    day: 28
   }
   identifier {
     type: "Git"
     value: "https://github.com/ittiam-systems/libxaac.git"
-    version: "7492f1f9abb4008758c00d0e9dabd1c12bd7cc25"
-    closest_version: "v0.1.12"
+    version: "55af74f9ce7cadb99fbd7870c6487c8a12d75689"
+    closest_version: "v0.1.13"
   }
 }

@@ -137,6 +137,11 @@ typedef struct {
 
   WORD32 ui_err_conceal;
   FLAG first_frame;
+#ifdef LOUDNESS_LEVELING_SUPPORT
+  WORD32 ui_loudness_leveling_flag;
+#endif
+  UWORD8 ui_drc_mode_cut;
+  UWORD8 ui_drc_mode_boost;
 } ia_aac_dec_config_struct;
 
 typedef struct ia_aac_dec_state_struct {
